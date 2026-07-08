@@ -1,0 +1,16 @@
+[
+  {
+    "id": 1,
+    "nome": "Linha Reta Horizontal",
+    "tipo": "reta",
+    "ponto_inicio": [150, 300],
+    "ponto_fim": [650, 300]
+  },
+  {
+    "id": 2,
+    "nome": "Linha Reta Diagonal",
+    "tipo": "reta",
+    "ponto_inicio": [150, 300],
+    "ponto_fim": [650, 290]
+  }
+]
