@@ -1,16 +1,42 @@
 [
   {
     "id": 1,
-    "nome": "Linha Reta Horizontal",
+    "nome": "Fase 1",
     "tipo": "reta",
     "ponto_inicio": [150, 300],
-    "ponto_fim": [650, 300]
+    "ponto_fim": [650, 300],
+    "pontos_guia": []
   },
   {
     "id": 2,
-    "nome": "Linha Reta Diagonal",
+    "nome": "Fase 2",
     "tipo": "reta",
     "ponto_inicio": [150, 300],
-    "ponto_fim": [650, 290]
+    "ponto_fim": [650, 275],
+    "pontos_guia": []
+  },
+  {
+    "id": 3,
+    "nome": "Fase 3",
+    "tipo": "reta",
+    "ponto_inicio": [150,300],
+    "ponto_fim": [650, 250],
+    "pontos_guia": []
+  },
+  {
+    "id": 4,
+    "nome": "Fase 4",
+    "tipo": "reta",
+    "ponto_inicio": [150,300],
+    "ponto_fim": [650, 225],
+    "pontos_guia": []
+  },
+  {
+    "id": 5,
+    "nome": "Fase 5",
+    "tipo": "reta",
+    "ponto_inicio": [150,300],
+    "ponto_fim": [650, 200],
+    "pontos_guia": []
   }
 ]
