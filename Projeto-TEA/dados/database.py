@@ -2,16 +2,16 @@ import mysql.connector
 from datetime import datetime
 
 def obter_conexao():
-    """Conecta diretamente ao banco de dados projeto_tea que você criou no XAMPP."""
+    """Estabelece a ligação direta com o banco de dados MySQL."""
     return mysql.connector.connect(
-        host="localhost",
-        user="root",       # Usuário padrão do XAMPP
-        password="",       # Senha padrão do XAMPP (em branco)
+        host="localhost",       # No mobile, substituirá pelo IP do servidor cloud
+        user="root",            # Utilizador padrão do XAMPP
+        password="",            # Senha padrão do XAMPP (vazia)
         database="projeto_tea"
     )
 
 def iniciar_banco():
-    """Cria a tabela onde serão salvas as tentativas da criança, caso ela não exista."""
+    """Cria a tabela de tentativas caso ela ainda não exista no sistema."""
     conn = obter_conexao()
     cursor = conn.cursor()
     cursor.execute('''
@@ -29,7 +29,7 @@ def iniciar_banco():
     conn.close()
 
 def salvar_tentativa(fase, tempo, precisao, hesitacao):
-    """Grava os resultados da sessão no MySQL."""
+    """Grava os resultados analíticos da sessão da criança no MySQL."""
     conn = obter_conexao()
     cursor = conn.cursor()
     
@@ -38,9 +38,27 @@ def salvar_tentativa(fase, tempo, precisao, hesitacao):
         VALUES (%s, %s, %s, %s, %s)
     '''
     agora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    valores = (fase, agora, tempo, precisao, hesitacao)
+    dados = (fase, agora, tempo, precisao, hesitacao)
     
-    cursor.execute(comando, valores)
+    cursor.execute(comando, dados)
     conn.commit()
     cursor.close()
     conn.close()
+
+def obter_ultimas_tentativas(limite=5):
+    """Busca as últimas tentativas salvas no banco de dados para exibir na interface."""
+    conn = obter_conexao()
+    cursor = conn.cursor()
+    
+    comando = '''
+        SELECT fase, tempo_execucao, precisao, indice_hesitacao 
+        FROM tentativas 
+        ORDER BY id DESC 
+        LIMIT %s
+    '''
+    cursor.execute(comando, (limite,))
+    resultados = cursor.fetchall()
+    
+    cursor.close()
+    conn.close()
+    return resultados
