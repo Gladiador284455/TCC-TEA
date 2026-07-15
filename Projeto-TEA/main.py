@@ -6,7 +6,7 @@ import os
 
 # Importando os outros módulos criados por você
 from ia.analise import calcular_metricas
-from dados.database import iniciar_banco, salvar_tentativa
+from dados.database import iniciar_banco, salvar_tentativa, obter_ultimas_tentativas
 
 # Inicialização
 pygame.init()
@@ -32,16 +32,83 @@ COR_BOTAO_HOVER = (180, 200, 220) # Cor quando o mouse passa por cima
 fonte = pygame.font.SysFont("comic sans", 22)
 fonte_titulo = pygame.font.SysFont("comic sans", 40, bold=True)
 
-# Carregando Fases
-caminho_json = os.path.join('dados', 'fases.json')
-with open(caminho_json, 'r') as f:
-    fases = json.load(f)
+# --- SISTEMA DE GERAÇÃO E ADAPTAÇÃO PROCEDURAL DE FASES ---
+
+def gerar_fase_por_angulo(id_fase, angulo_graus, comprimento=550):
+    """
+    Gera dinamicamente uma fase baseada em um ângulo, mantendo a reta
+    perfeitamente centralizada na tela de 800x600.
+    """
+    # Centro da tela
+    centro_x = 400
+    centro_y = 300
+    
+    # Conversão do ângulo para radianos
+    angulo_rad = math.radians(angulo_graus)
+    
+    # Metade do comprimento para cada lado a partir do centro
+    metade_comp = comprimento / 2
+    
+    # Calcula o deslocamento em X e Y usando cosseno e seno
+    dx = metade_comp * math.cos(angulo_rad)
+    dy = metade_comp * math.sin(angulo_rad)
+    
+    # Ponto inicial (esquerda/baixo) e Ponto final (direita/cima)
+    # Subtraímos o dy no ponto final para a linha "subir" no Pygame
+    x_init = int(centro_x - dx)
+    y_init = int(centro_y + dy)
+    
+    x_end = int(centro_x + dx)
+    y_end = int(centro_y - dy)
+    
+    # Garante limites de segurança para os círculos não encostarem nas bordas extremas
+    x_init = max(50, min(x_init, 750))
+    y_init = max(50, min(y_init, 550))
+    x_end = max(50, min(x_end, 750))
+    y_end = max(50, min(y_end, 550))
+    
+    return {
+        "id": id_fase,
+        "nome": f"Fase Adaptativa - Angulo {angulo_graus}graus",
+        "tipo": "reta",
+        "angulo": angulo_graus,
+        "ponto_inicio": [x_init, y_init],
+        "ponto_fim": [x_end, y_end],
+        "pontos_guia": []
+    }
+
+def calcular_proximo_passo(precisao_anterior, angulo_atual):
+    """
+    Aplica as regras do time de pesquisa:
+    - Abaixo de 30%: Volta duas fases (máximo 10°)
+    - De 30% a 49%: Volta uma fase (máximo 5°)
+    - De 50% a 59%: Repete a fase atual
+    - 60% ou mais: Avança para a próxima (+5°)
+    """
+    if precisao_anterior >= 60.0:
+        novo_angulo = min(45, angulo_atual + 2.5) # Limita a 45 graus (diagonal)
+        status = "AVANCAR"
+    elif 50.0 <= precisao_anterior < 60.0:
+        novo_angulo = angulo_atual
+        status = "REPETIR"
+    elif 30.0 <= precisao_anterior < 50.0:
+        novo_angulo = max(0, angulo_atual - 2.5)
+        status = "VOLTAR_UMA"
+    else: # Abaixo de 30%
+        novo_angulo = max(0, angulo_atual - 5)
+        status = "VOLTAR_DUAS"
+        
+    return novo_angulo, status
 
 # Variáveis de Estado do Jogo
 estado_jogo = "MENU" # Estados possíveis: "MENU", "JOGANDO", "OPCOES", "ESTATISTICAS"
 
-# Variáveis do Jogo (Fases)
-fase_atual_idx = 0
+# Controle das Fases Dinâmicas
+angulo_atual = 0  # Inicia em 0 graus (reta perfeitamente horizontal)
+id_fase_dinamica = 1
+fase_atual = gerar_fase_por_angulo(id_fase_dinamica, angulo_atual)
+
+# Variáveis de Traçado do Usuário
 coordenadas_usuario = []
 tempos_toque = []
 desenhando = False
@@ -125,22 +192,62 @@ def desenhar_tela_opcoes():
 
 
 def desenhar_tela_estatisticas():
-    """Desenha a tela de Estatísticas."""
+    """Desenha a tela de Estatísticas com dados dinâmicos recuperados do MySQL."""
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
     
-    texto_titulo = fonte_titulo.render("Estatísticas", True, COR_TEXTO)
-    rect_titulo = texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.15))
+    # Título da página
+    texto_titulo = fonte_titulo.render("Estatísticas de Desempenho", True, COR_TEXTO)
+    rect_titulo = texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.12))
     tela.blit(texto_titulo, rect_titulo)
     
-    # Exemplo de texto informativo
-    txt_info = fonte.render("Os dados de desempenho são salvos diretamente no seu MySQL.", True, COR_TEXTO)
-    rect_info = txt_info.get_rect(center=(LARGURA // 2, ALTURA * 0.4))
-    tela.blit(txt_info, rect_info)
+    # Busca tentativas no MySQL de forma segura
+    try:
+        dados = obter_ultimas_tentativas(5)
+    except Exception:
+        dados = []
+
+    # Cabeçalho da Tabela
+    colunasY = int(ALTURA * 0.25)
+    titulos_colunas = ["Fase", "Tempo", "Precisão", "Taxa de Erro"]
+    posicoes_x = [50, 300, 480, 640]
     
+    for i, col_nome in enumerate(titulos_colunas):
+        txt_col = fonte.render(col_nome, True, COR_TEXTO)
+        tela.blit(txt_col, (posicoes_x[i], colunasY))
+        
+    pygame.draw.line(tela, COR_GUIA, (50, colunasY + 30), (750, colunasY + 30), 2)
+    
+    # Exibe linhas de estatísticas
+    if not dados:
+        txt_vazio = fonte.render("Sem dados gravados ou MySQL inativo.", True, (150, 150, 150))
+        tela.blit(txt_vazio, (50, colunasY + 60))
+    else:
+        distancia_linha = 40
+        for idx, registro in enumerate(dados):
+            linhaY = colunasY + 50 + (idx * distancia_linha)
+            
+            nome_fase = registro[0]
+            tempo = f"{registro[1]:.1f}s"
+            precisao_val = registro[2]
+            precisao = f"{precisao_val:.1f}%"
+            taxa_erro_val = 100.0 - precisao_val
+            taxa_erro = f"{taxa_erro_val:.1f}%"
+            
+            if len(nome_fase) > 18:
+                nome_fase = nome_fase[:15] + "..."
+                
+            tela.blit(fonte.render(nome_fase, True, COR_TEXTO), (posicoes_x[0], linhaY))
+            tela.blit(fonte.render(tempo, True, COR_TEXTO), (posicoes_x[1], linhaY))
+            tela.blit(fonte.render(precisao, True, COR_TEXTO), (posicoes_x[2], linhaY))
+            
+            # Pinta a taxa de erro de vermelho se estiver muito alta (acima de 30%)
+            cor_erro = (180, 50, 50) if taxa_erro_val > 30.0 else COR_TEXTO
+            tela.blit(fonte.render(taxa_erro, True, cor_erro), (posicoes_x[3], linhaY))
+
     # Botão "Voltar"
     btn_voltar_rect = pygame.Rect(0, 0, 200, 50)
-    btn_voltar_rect.center = (LARGURA // 2, ALTURA * 0.8)
+    btn_voltar_rect.center = (LARGURA // 2, ALTURA * 0.88)
     
     cor = COR_BOTAO_HOVER if btn_voltar_rect.collidepoint(mouse_pos) else COR_BOTAO
     pygame.draw.rect(tela, cor, btn_voltar_rect, border_radius=10)
@@ -157,7 +264,7 @@ while rodando:
     
     if estado_jogo == "MENU":
         # Renderiza o menu e captura os retângulos dos botões para checar o clique
-        btn_jogar, btn_opções, btn_estat, btn_sair = desenhar_menu()
+        btn_jogar, btn_opcoes, btn_estat, btn_sair = desenhar_menu()
         
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -167,7 +274,7 @@ while rodando:
                 if evento.button == 1:
                     if btn_jogar.collidepoint(evento.pos):
                         estado_jogo = "JOGANDO"
-                    elif btn_opções.collidepoint(evento.pos):
+                    elif btn_opcoes.collidepoint(evento.pos):
                         estado_jogo = "OPCOES" 
                     elif btn_estat.collidepoint(evento.pos):
                         estado_jogo = "ESTATISTICAS" 
@@ -197,11 +304,10 @@ while rodando:
                     if btn_voltar.collidepoint(evento.pos):
                         estado_jogo = "MENU" 
  
-    # --- LÓGICA DO JOGO ---
+    # --- LÓGICA DO JOGO (ADAPTATIVA) ---
     elif estado_jogo == "JOGANDO":
-        fase = fases[fase_atual_idx]
-        p_init = fase["ponto_inicio"]
-        p_end = fase["ponto_fim"]
+        p_init = fase_atual["ponto_inicio"]
+        p_end = fase_atual["ponto_fim"]
         
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -227,25 +333,37 @@ while rodando:
                     dist_alvo = math.sqrt((pos_final[0] - p_end[0])**2 + (pos_final[1] - p_end[1])**2)
                     
                     if dist_alvo <= 25:
+                        # 1. Calcula as estatísticas
                         precisao, hesitacao = calcular_metricas(
-                            fase["tipo"], p_init, p_end, 
-                            fase.get("pontos_guia", []), 
+                            fase_atual["tipo"], p_init, p_end, 
+                            fase_atual.get("pontos_guia", []), 
                             coordenadas_usuario, tempos_toque
                         )
                         tempo_total = tempos_toque[-1] - tempos_toque[0] if tempos_toque else 0.0
                         
-                        salvar_tentativa(fase["nome"], tempo_total, precisao, hesitacao)
+                        # 2. Salva no MySQL
+                        salvar_tentativa(fase_atual["nome"], tempo_total, precisao, hesitacao)
                         
-                        if precisao >= 70.0:
-                            fase_atual_idx += 1
-                            if fase_atual_idx < len(fases):
-                                mensagem_status = "Muito bem! Gravado no MySQL. Indo para a próxima fase!"
-                            else:
-                                mensagem_status = "Excelente! Todas as fases concluídas e salvas!"
-                                estado_jogo = "MENU" # Retorna ao menu ao acabar tudo
-                                fase_atual_idx = 0 
-                        else:
-                            mensagem_status = f"Tentativa salva no BD. Precisão baixa ({precisao:.1f}%). Tente de novo!"
+                        # 3. Processa o algoritmo de Adaptação com base na precisão
+                        novo_angulo, status = calcular_proximo_passo(precisao, angulo_atual)
+                        
+                        if status == "AVANCAR":
+                            angulo_atual = novo_angulo
+                            id_fase_dinamica += 1
+                            mensagem_status = f"Muito bem! Precisão: {precisao:.1f}%. Avançou para o ângulo {angulo_atual}°!"
+                        elif status == "REPETIR":
+                            mensagem_status = f"Quase lá! Precisão: {precisao:.1f}%. Vamos repetir para treinar!"
+                        elif status == "VOLTAR_UMA":
+                            angulo_atual = novo_angulo
+                            id_fase_dinamica = max(1, id_fase_dinamica - 1)
+                            mensagem_status = f"Foco! Precisão: {precisao:.1f}%. Voltamos 1 nível para ajudar."
+                        elif status == "VOLTAR_DUAS":
+                            angulo_atual = novo_angulo
+                            id_fase_dinamica = max(1, id_fase_dinamica - 2)
+                            mensagem_status = f"Foco! Precisão: {precisao:.1f}%. Voltamos 2 níveis para praticar."
+                        
+                        # 4. Gera a nova fase com o ângulo ajustado
+                        fase_atual = gerar_fase_por_angulo(id_fase_dinamica, angulo_atual)
                         
                         coordenadas_usuario = []
                         tempos_toque = []
@@ -266,7 +384,7 @@ while rodando:
         txt_status = fonte.render(mensagem_status, True, COR_TEXTO)
         tela.blit(txt_status, (20, 20))
         
-        txt_fase = fonte.render(f"Fase: {fase['nome']}", True, COR_TEXTO)
+        txt_fase = fonte.render(f"Fase: {fase_atual['nome']}", True, COR_TEXTO)
         tela.blit(txt_fase, (20, ALTURA - 40))
 
     pygame.display.flip()
