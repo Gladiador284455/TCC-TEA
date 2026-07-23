@@ -1,64 +1,106 @@
-import mysql.connector
+import sqlite3
+import os
 from datetime import datetime
 
+# Localiza a pasta raiz do projeto (onde projeto_tea.sql ou este módulo está localizado)
+DIRETORIO_ATUAL = os.path.dirname(os.path.abspath(__file__))
+
+# Se este arquivo estiver dentro de uma subpasta (ex: 'dados/database.py'), 
+# desce um nível para salvar o banco na raiz. Se estiver na raiz, usa a própria pasta.
+NOME_ARQUIVO = "dados_playdot.db"
+
+# Procura a pasta do projeto (onde está o arquivo projeto_tea.sql)
+pasta_raiz = DIRETORIO_ATUAL
+if os.path.exists(os.path.join(DIRETORIO_ATUAL, "..", "projeto_tea.sql")):
+    pasta_raiz = os.path.abspath(os.path.join(DIRETORIO_ATUAL, ".."))
+elif os.path.exists(os.path.join(DIRETORIO_ATUAL, "projeto_tea.sql")):
+    pasta_raiz = DIRETORIO_ATUAL
+
+CAMINHO_BANCO = os.path.join(pasta_raiz, NOME_ARQUIVO)
+
 def obter_conexao():
-    """Estabelece a ligação direta com o banco de dados MySQL."""
-    return mysql.connector.connect(
-        host="localhost",       # No mobile, substituirá pelo IP do servidor cloud
-        user="root",            # Utilizador padrão do XAMPP
-        password="",            # Senha padrão do XAMPP (vazia)
-        database="projeto_tea"
-    )
+    """Conecta ao arquivo de banco de dados SQLite local no diretório especificado."""
+    conn = sqlite3.connect(CAMINHO_BANCO)
+    conn.row_factory = sqlite3.Row  # Permite acessar colunas por nome
+    return conn
 
 def iniciar_banco():
-    """Cria a tabela de tentativas caso ela ainda não exista no sistema."""
+    """Cria o arquivo do banco na mesma pasta e as tabelas caso ainda não existam."""
     conn = obter_conexao()
     cursor = conn.cursor()
+    
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS tentativas (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            fase VARCHAR(100),
-            timestamp DATETIME,
-            tempo_execucao FLOAT,
-            precisao FLOAT,
-            indice_hesitacao FLOAT
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fase TEXT,
+            timestamp TEXT,
+            tempo_execucao REAL,
+            precisao REAL,
+            indice_hesitacao REAL
         )
     ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS criancas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            nascimento TEXT,
+            sexo TEXT,
+            obs TEXT
+        )
+    ''')
+    
     conn.commit()
-    cursor.close()
     conn.close()
 
 def salvar_tentativa(fase, tempo, precisao, hesitacao):
-    """Grava os resultados analíticos da sessão da criança no MySQL."""
     conn = obter_conexao()
     cursor = conn.cursor()
-    
-    comando = '''
-        INSERT INTO tentativas (fase, timestamp, tempo_execucao, precisao, indice_hesitacao)
-        VALUES (%s, %s, %s, %s, %s)
-    '''
     agora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    dados = (fase, agora, tempo, precisao, hesitacao)
     
-    cursor.execute(comando, dados)
+    cursor.execute('''
+        INSERT INTO tentativas (fase, timestamp, tempo_execucao, precisao, indice_hesitacao)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (fase, agora, tempo, precisao, hesitacao))
+    
     conn.commit()
-    cursor.close()
     conn.close()
 
 def obter_ultimas_tentativas(limite=5):
-    """Busca as últimas tentativas salvas no banco de dados para exibir na interface."""
     conn = obter_conexao()
     cursor = conn.cursor()
     
-    comando = '''
+    cursor.execute('''
         SELECT fase, tempo_execucao, precisao, indice_hesitacao 
         FROM tentativas 
         ORDER BY id DESC 
-        LIMIT %s
-    '''
-    cursor.execute(comando, (limite,))
-    resultados = cursor.fetchall()
+        LIMIT ?
+    ''', (limite,))
     
-    cursor.close()
+    resultados = cursor.fetchall()
+    conn.close()
+    return resultados
+
+def salvar_crianca(nome, nascimento, sexo, obs):
+    conn = obter_conexao()
+    cursor = conn.cursor()
+    
+    cursor.execute(
+        "INSERT INTO criancas (nome, nascimento, sexo, obs) VALUES (?, ?, ?, ?)",
+        (nome, nascimento, sexo, obs)
+    )
+    
+    conn.commit()
+    conn.close()
+
+def obter_criancas():
+    conn = obter_conexao()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, nome, nascimento, sexo, obs FROM criancas")
+    linhas = cursor.fetchall()
+    
+    resultados = [dict(linha) for linha in linhas]
+    
     conn.close()
     return resultados
