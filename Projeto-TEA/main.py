@@ -4,23 +4,31 @@ import math
 import time
 import os
 
-# Importando os outros módulos criados
+# Importando os outros módulos do projeto
 from ia.analise import calcular_metricas
-from dados.database import iniciar_banco, salvar_tentativa, obter_ultimas_tentativas
+from dados.database import (
+    iniciar_banco, 
+    salvar_tentativa, 
+    obter_ultimas_tentativas, 
+    salvar_crianca, 
+    obter_criancas
+)
 
-# Inicialização
+# Inicialização do Pygame
 pygame.init()
 pygame.font.init()
 
-# Tenta iniciar o banco, sem travar o jogo se falhar
+# Inicializa o banco SQLite offline
+lista_criancas = []
 try:
     iniciar_banco()
     db_ativo = True
+    lista_criancas = obter_criancas()
 except Exception as e:
-    print(f"Aviso: Banco de dados inativo. Rodando em modo de simulação local. Erro: {e}")
+    print(f"Aviso: Erro ao iniciar banco local. Rodando em modo de simulação temporário. Erro: {e}")
     db_ativo = False
 
-# Janela
+# Configuração da Janela
 LARGURA, ALTURA = 800, 600
 tela = pygame.display.set_mode((LARGURA, ALTURA))
 pygame.display.set_caption("PlayDot")
@@ -52,7 +60,6 @@ pin_correto = "0000"
 pin_digitado = ""
 mensagem_erro_pin = ""
 
-lista_criancas = []
 crianca_selecionada = None
 
 # Campos de digitação do cadastro
@@ -84,13 +91,9 @@ def renderizar_texto_com_scroll(texto_completo, prefixo, largura_maxima_util, re
     img_prefixo = font_campo.render(prefixo, True, COR_TEXTO)
     largura_prefixo = img_prefixo.get_width()
     
-    # Margem de segurança de 20px interna no retângulo
     largura_disponivel_texto = largura_maxima_util - largura_prefixo - 20
-    
-    # Adiciona o cursor visual de digitação se o campo estiver ativo
     texto_com_cursor = texto_completo + "|"
     
-    # Descobre qual parte do final da string cabe no espaço do input
     texto_visivel = texto_com_cursor
     for i in range(len(texto_com_cursor) + 1):
         texto_visivel = texto_com_cursor[i:]
@@ -98,7 +101,6 @@ def renderizar_texto_com_scroll(texto_completo, prefixo, largura_maxima_util, re
         if img_teste.get_width() <= largura_disponivel_texto:
             break
             
-    # Blit do prefixo fixo e do texto cortado com scroll
     tela.blit(img_prefixo, (rect_x + 10, rect_y + 10))
     img_texto_final = font_campo.render(texto_visivel, True, COR_TEXTO)
     tela.blit(img_texto_final, (rect_x + 10 + largura_prefixo, rect_y + 10))
@@ -115,19 +117,14 @@ def formatar_e_validar_data(texto_atual, novo_char):
     if len(apenas_numeros) > 8:
         apenas_numeros = apenas_numeros[:8]
         
-    # Validações parciais em tempo real
     if len(apenas_numeros) >= 2:
         dia = int(apenas_numeros[0:2])
-        if dia > 31: 
-            return texto_atual  
-        if dia == 0 and len(apenas_numeros) == 2:
+        if dia > 31 or (dia == 0 and len(apenas_numeros) == 2):
             return texto_atual  
             
     if len(apenas_numeros) >= 4:
         mes = int(apenas_numeros[2:4])
-        if mes > 12: 
-            return texto_atual  
-        if mes == 0 and len(apenas_numeros) == 4:
+        if mes > 12 or (mes == 0 and len(apenas_numeros) == 4):
             return texto_atual  
 
     resultado = ""
@@ -212,7 +209,6 @@ def desenhar_tela_abertura():
     texto_logo = fonte_titulo.render("PlayDot", True, COR_TEXTO)
     tela.blit(texto_logo, texto_logo.get_rect(center=(LARGURA // 2, ALTURA * 0.48)))
     
-    # Botão Iniciar
     btn_iniciar = pygame.Rect(0, 0, 220, 50)
     btn_iniciar.center = (LARGURA // 2, ALTURA * 0.68)
     cor_i = COR_BOTAO_HOVER if btn_iniciar.collidepoint(mouse_pos) else COR_BOTAO
@@ -220,7 +216,6 @@ def desenhar_tela_abertura():
     txt_btn = fonte.render("Iniciar", True, COR_TEXTO)
     tela.blit(txt_btn, txt_btn.get_rect(center=btn_iniciar.center))
     
-    # Botão Sair
     btn_sair = pygame.Rect(0, 0, 220, 50)
     btn_sair.center = (LARGURA // 2, ALTURA * 0.78)
     cor_s = (240, 180, 180) if btn_sair.collidepoint(mouse_pos) else COR_BOTAO
@@ -249,7 +244,6 @@ def desenhar_tela_pin_acesso(titulo="Acesso do Responsável"):
     txt_pin = fonte_titulo.render(texto_escondido, True, COR_TEXTO)
     tela.blit(txt_pin, txt_pin.get_rect(center=caixa_senha.center))
     
-    # Botões Confirmar e Cancelar Centralizados Corretamente
     btn_confirmar = pygame.Rect(0, 0, 160, 45)
     btn_confirmar.center = (LARGURA // 2 + 100, ALTURA * 0.65)
     cor_conf = COR_BOTAO_HOVER if btn_confirmar.collidepoint(mouse_pos) else COR_BOTAO
@@ -375,7 +369,7 @@ def desenhar_cadastro_crianca():
     pygame.draw.rect(tela, COR_GUIA, rect_obs, width=2, border_radius=5)
     renderizar_texto_com_scroll(input_cadastro['obs'], "Observações: ", 600, 100, 310)
     
-    # BOTÕES CENTRALIZADOS SIMETRICAMENTE EM RELAÇÃO À LARGURA DA TELA
+    # Botões Confirmar e Cancelar
     btn_cancelar = pygame.Rect(0, 480, 180, 45)
     btn_cancelar.centerx = (LARGURA // 2) - 110  
     cor_ca = COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
@@ -426,7 +420,6 @@ def desenhar_tela_configuracoes():
     pygame.draw.rect(tela, COR_GUIA, rect_novo_pin, width=2, border_radius=5)
     renderizar_texto_com_scroll(temp_pin_novo, "", 150, 320, 290)
     
-    # Botões Confirmar e Cancelar Alinhados Simetricamente
     btn_cancelar = pygame.Rect(0, 480, 180, 45)
     btn_cancelar.centerx = (LARGURA // 2) - 110
     cor_ca = COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
@@ -481,7 +474,6 @@ def desenhar_menu_crianca():
     txt_btn = fonte.render("Continuar", True, COR_BRANCO if crianca_selecionada else COR_TEXTO)
     tela.blit(txt_btn, txt_btn.get_rect(center=btn_continuar.center))
     
-    # Botão Voltar Posicionado de Forma Limpa
     btn_voltar = pygame.Rect(50, 500, 120, 40)
     cor_voltar = COR_BOTAO_HOVER if btn_voltar.collidepoint(mouse_pos) else COR_BOTAO
     pygame.draw.rect(tela, cor_voltar, btn_voltar, border_radius=10)
@@ -543,7 +535,7 @@ def desenhar_tela_estatisticas():
     pygame.draw.line(tela, COR_GUIA, (50, colunasY + 30), (750, colunasY + 30), 2)
     
     if not dados:
-        txt_vazio = fonte.render("Sem dados de teste gravados no MySQL local.", True, (150, 150, 150))
+        txt_vazio = fonte.render("Sem dados de teste gravados no banco local.", True, (150, 150, 150))
         tela.blit(txt_vazio, (50, colunasY + 60))
     else:
         distancia_linha = 40
@@ -676,14 +668,17 @@ while rodando:
                     input_cadastro["sexo"] = "Feminino"
                 elif btn_conf.collidepoint(evento.pos):
                     if input_cadastro["nome"].strip():
-                        novo_id = len(lista_criancas) + 1
-                        lista_criancas.append({
-                            "id": novo_id,
-                            "nome": input_cadastro["nome"],
-                            "nascimento": input_cadastro["nascimento"],
-                            "sexo": input_cadastro["sexo"],
-                            "obs": input_cadastro["obs"]
-                        })
+                        if db_ativo:
+                            try:
+                                salvar_crianca(
+                                    input_cadastro["nome"],
+                                    input_cadastro["nascimento"],
+                                    input_cadastro["sexo"],
+                                    input_cadastro["obs"]
+                                )
+                                lista_criancas = obter_criancas()
+                            except Exception as e:
+                                print(f"Erro ao salvar no banco local: {e}")
                     estado_jogo = "MENU_RESPONSAVEL"
                 elif btn_canc.collidepoint(evento.pos):
                     estado_jogo = "MENU_RESPONSAVEL"
@@ -698,7 +693,6 @@ while rodando:
                         input_cadastro[campo_ativo] = input_cadastro[campo_ativo][:-1]
                 else:
                     if campo_ativo == "nome":
-                        # NOVO: Bloqueia qualquer caractere numérico no nome
                         if not evento.unicode.isdigit():
                             input_cadastro["nome"] += evento.unicode
                     elif campo_ativo == "nascimento":
@@ -791,32 +785,26 @@ while rodando:
         p_end = fase_atual["ponto_fim"]
         mouse_pos = pygame.mouse.get_pos()
         
-        # 1. BOTÃO SAIR (Ancorado estritamente em relação à margem direita da tela)
         largura_btn_sair = 110
         btn_sair_jogo = pygame.Rect(LARGURA - largura_btn_sair - 25, 20, largura_btn_sair, 35)
         
-        # 2. ALINHAMENTO DINÂMICO DOS BOTÕES "REPETIR FASE" E "AVANÇAR"
         largura_botoes_fase = 180
         altura_botoes_fase = 45
         espacamento_botoes = 40
         largura_conjunto = (largura_botoes_fase * 2) + espacamento_botoes
         
-        # Centraliza o bloco na horizontal e fixa no rodapé
         pos_inicial_x = (LARGURA - largura_conjunto) // 2
         y_botoes_fase = 495
         
         btn_repetir = pygame.Rect(pos_inicial_x, y_botoes_fase, largura_botoes_fase, altura_botoes_fase)
         btn_continuar = pygame.Rect(pos_inicial_x + largura_botoes_fase + espacamento_botoes, y_botoes_fase, largura_botoes_fase, altura_botoes_fase)
         
-        # 3. BOTÃO "VOLTAR AO MENU PRINCIPAL" DINÂMICO (Impede texto saindo da borda)
         texto_fim = "Voltar ao Menu Principal"
         texto_fim_largura, texto_fim_altura = fonte.size(texto_fim)
         
-        # Padding interno (margem interna de conforto de 50px de largura e 20px de altura)
         largura_btn_fim = texto_fim_largura + 50
         altura_btn_fim = texto_fim_altura + 20
         
-        # Centralização simétrica na tela
         btn_menu_fim = pygame.Rect(0, 0, largura_btn_fim, altura_btn_fim)
         btn_menu_fim.center = (LARGURA // 2, y_botoes_fase + (altura_botoes_fase // 2))
 
@@ -923,25 +911,20 @@ while rodando:
         if jogo_finalizado:
             cor_mf = COR_BOTAO_HOVER if btn_menu_fim.collidepoint(mouse_pos) else COR_INICIO
             pygame.draw.rect(tela, cor_mf, btn_menu_fim, border_radius=10)
-            
-            # Centraliza o texto dinamicamente no interior do botão "Voltar ao Menu Principal"
             txt_fim_img = fonte.render(texto_fim, True, COR_BRANCO)
             tela.blit(txt_fim_img, txt_fim_img.get_rect(center=btn_menu_fim.center))
             
         elif fase_concluida:
-            # Botão "Repetir"
             cor_rep = COR_BOTAO_HOVER if btn_repetir.collidepoint(mouse_pos) else COR_BOTAO
             pygame.draw.rect(tela, cor_rep, btn_repetir, border_radius=10)
             txt_rep_img = fonte.render("Repetir Fase", True, COR_TEXTO)
             tela.blit(txt_rep_img, txt_rep_img.get_rect(center=btn_repetir.center))
             
-            # Botão "Avançar"
             cor_av = COR_BOTAO_HOVER if btn_continuar.collidepoint(mouse_pos) else COR_INICIO
             pygame.draw.rect(tela, cor_av, btn_continuar, border_radius=10)
             txt_av_img = fonte.render("Avançar", True, COR_BRANCO)
             tela.blit(txt_av_img, txt_av_img.get_rect(center=btn_continuar.center))
         else:
-            # Botão "Sair" do ambiente de jogo ativo
             cor_sj = COR_BOTAO_HOVER if btn_sair_jogo.collidepoint(mouse_pos) else COR_BOTAO
             pygame.draw.rect(tela, cor_sj, btn_sair_jogo, border_radius=5)
             txt_sair_img = fonte.render("Sair", True, COR_TEXTO)
