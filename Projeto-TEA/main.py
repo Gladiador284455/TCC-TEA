@@ -1,11 +1,11 @@
 import pygame
-import json
 import math
 import time
 import os
+import json
 
-# Importando os outros módulos do projeto
-from ia.analise import calcular_metricas
+# Importando os módulos atualizados do projeto
+from algoritmo.analise import calcular_metricas
 from dados.database import (
     iniciar_banco, 
     salvar_tentativa, 
@@ -25,69 +25,204 @@ try:
     db_ativo = True
     lista_criancas = obter_criancas()
 except Exception as e:
-    print(f"Aviso: Erro ao iniciar banco local. Rodando em modo de simulação temporário. Erro: {e}")
+    print(f"Aviso: Erro ao iniciar banco local. Erro: {e}")
     db_ativo = False
 
 # Configuração da Janela
-LARGURA, ALTURA = 800, 600
+LARGURA, ALTURA = 1280, 720
 tela = pygame.display.set_mode((LARGURA, ALTURA))
 pygame.display.set_caption("PlayDot")
 relogio = pygame.time.Clock()
 
-# Cores
-COR_FUNDO = (245, 245, 245)
-COR_GUIA = (210, 210, 210)
-COR_RASTRO = (70, 130, 180)     
-COR_INICIO = (46, 139, 87)      
-COR_ALVO = (30, 144, 255)       
+# ==========================================
+#  PALETA DE CORES
+# ==========================================
+COR_FUNDO = (217, 249, 252)        # #D9F9FC (Azul/Ciano suave)
+COR_GUIA = (210, 210, 210)         # Cinza claro
+COR_INICIO = (140, 184, 122)       # #8CB87A (Verde suave para ações principais)
+COR_ALVO = (246, 141, 141)         # #F68D8D (Rosa/Vermelho suave)
+COR_DESTAQUE = (255, 212, 112)     # #FFD470 (Amarelo suave)
+
 COR_TEXTO = (50, 50, 50)
-COR_BOTAO = (220, 220, 220)
-COR_BOTAO_HOVER = (180, 200, 220)
-COR_INPUT_ATIVO = (150, 180, 220)
+COR_BOTAO = (255, 255, 255)        # Branco para contraste sobre o fundo claro
+COR_BOTAO_HOVER = (255, 212, 112)  # #FFD470 (Amarelo ao passar o mouse)
+COR_INPUT_ATIVO = (125, 193, 200)  # #7DC1C8
 COR_BRANCO = (255, 255, 255)
 
-fonte = pygame.font.SysFont("comic sans", 22)
-fonte_titulo = pygame.font.SysFont("comic sans", 40, bold=True)
-font_campo = pygame.font.SysFont("comic sans", 18)
+# Paleta para o traçado utilizando a nova identidade
+OPCOES_CORES_TRACADO = {
+    "Verde": (140, 184, 122),    # #8CB87A
+    "Azul": (125, 193, 200),     # #7DC1C8
+    "Rosa": (246, 141, 141),     # #F68D8D
+    "Amarelo": (255, 212, 112)   # #FFD470
+}
 
 # ==========================================
-#  VARIÁVEIS GLOBAIS DE ESTADO E SIMULAÇÃO
+#  CARREGAMENTO DE FONTES (assets/fontes/)
 # ==========================================
+NOME_FONTE_COINY = os.path.join("assets", "fontes", "Coiny-Regular.ttf")
+NOME_FONTE_MPLUS = os.path.join("assets", "fontes", "MPLUS1p-Regular.ttf")
 
-estado_jogo = "ABERTURA"  
+if os.path.exists(NOME_FONTE_MPLUS):
+    fonte = pygame.font.Font(NOME_FONTE_MPLUS, 22)
+else:
+    fonte = pygame.font.SysFont("MPLUS 1p", 22)
 
-pin_correto = "0000"
+if os.path.exists(NOME_FONTE_COINY):
+    fonte_titulo = pygame.font.Font(NOME_FONTE_COINY, 36)
+    font_campo = pygame.font.Font(NOME_FONTE_COINY, 18)
+else:
+    fonte_titulo = pygame.font.SysFont("coiny", 36, bold=True)
+    font_campo = pygame.font.SysFont("coiny", 18)
+
+
+# ==========================================
+#  PERSISTÊNCIA DE CONFIGURAÇÕES (JSON)
+# ==========================================
+ARQUIVO_CONFIG = os.path.join("dados", "config.json")
+ARQUIVO_CONFIG_PERFIS = os.path.join("dados", "config_perfis.json")
+
+def carregar_configuracoes():
+    configs_padrao = {
+        "ruido": "Baixo",
+        "pin": "0000",
+        "config_criancas": {}  # Armazena configs específicas por id_crianca
+    }
+    if os.path.exists(ARQUIVO_CONFIG):
+        try:
+            with open(ARQUIVO_CONFIG, "r", encoding="utf-8") as f:
+                dados_salvos = json.load(f)
+                configs_padrao.update(dados_salvos)
+        except Exception as e:
+            print(f"Erro ao carregar configurações salvas: {e}")
+    return configs_padrao
+
+def salvar_configuracoes(configs):
+    try:
+        with open(ARQUIVO_CONFIG, "w", encoding="utf-8") as f:
+            json.dump(configs, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        print(f"Erro ao salvar configurações no arquivo: {e}")
+
+# ==========================================
+#  CARREGAMENTO DE ÍCONES (assets/imagens/)
+# ==========================================
+TAMANHO_ICONE = (50, 50)
+
+def carregar_e_dimensionar(caminho, tamanho=TAMANHO_ICONE):
+    if os.path.exists(caminho):
+        try:
+            img = pygame.image.load(caminho).convert_alpha()
+            return pygame.transform.smoothscale(img, tamanho)
+        except Exception as e:
+            print(f"Erro ao carregar imagem {caminho}: {e}")
+    return None
+
+# Redimensionamento do Logotipo (Ajustes são feitos aqui)
+LARGURA_LOGO, ALTURA_LOGO = 320, 280 
+
+icones = {
+    "Logotipo": carregar_e_dimensionar(
+        os.path.join("assets", "imagens", "Logotipo.png"), 
+        (LARGURA_LOGO, ALTURA_LOGO)
+    ),
+    "Cão": carregar_e_dimensionar(os.path.join("assets", "imagens", "Cão.png")),
+    "Casinha": carregar_e_dimensionar(os.path.join("assets", "imagens", "Casinha.png"))
+}
+# ==========================================
+#  VARIÁVEIS GLOBAIS DE ESTADO
+# ==========================================
+estado_jogo = "MENU_RESPONSAVEL"  
+destino_apos_pin = "MENU_RESPONSAVEL"
+
 pin_digitado = ""
 mensagem_erro_pin = ""
-
 crianca_selecionada = None
+crianca_config_selecionada = None  # Criança selecionada na tela de configurações
 
-# Campos de digitação do cadastro
 input_cadastro = {"nome": "", "nascimento": "", "sexo": "Masculino", "obs": ""}
 campo_ativo = None  
 
-configs_jogo = {
-    "ruido": "Baixo",
-    "brilho": 200,
-    "pin": "1234"
-}
+configs_jogo = carregar_configuracoes()
 campo_config_ativo = None
 temp_pin_novo = ""
 
-fase_concluida = False
-jogo_finalizado = False  
-resultado_rodada = {"precisao": 0.0, "tempo": 0.0, "novo_angulo": 0.0, "status": ""}
-coordenadas_salvas_para_desenho = []
+cor_tracado_temp = "Azul"
+ruido_temp = "Baixo"
 
 LIMITE_ANGULO_MAXIMO = 30.0
+angulo_atual = 0.0  
+id_fase_dinamica = 1
 
-# --- FUNÇÕES DE AUXÍLIO DE RENDERIZAÇÃO E FORMATAÇÃO ---
+tentativas_precisoes = []
+tentativa_atual_num = 1     
+
+jogo_finalizado = False  
+coordenadas_usuario = []
+tempos_toque = []
+coordenadas_salvas_para_desenho = []
+desenhando = False
+mensagem_status = "Conecte o mascote à Casinha!"
+
+# ==========================================
+#  FUNÇÕES AUXILIARES DE DESENHO E FORMATO
+# ==========================================
+def desenhar_linha_tracejada(superficie, cor, inicio, fim, largura=4, comp_traco=12, espaco=8):
+    x1, y1 = inicio
+    x2, y2 = fim
+    distancia = math.hypot(x2 - x1, y2 - y1)
+    if distancia == 0:
+        return
+    
+    dx = (x2 - x1) / distancia
+    dy = (y2 - y1) / distancia
+    
+    comprimento_total = comp_traco + espaco
+    num_passos = int(distancia // comprimento_total)
+    
+    for i in range(num_passos + 1):
+        p1_x = x1 + dx * (i * comprimento_total)
+        p1_y = y1 + dy * (i * comprimento_total)
+        p2_x = x1 + dx * min(i * comprimento_total + comp_traco, distancia)
+        p2_y = y1 + dy * min(i * comprimento_total + comp_traco, distancia)
+        pygame.draw.line(superficie, cor, (int(p1_x), int(p1_y)), (int(p2_x), int(p2_y)), largura)
+
+def desenhar_rastro_tracejada(superficie, cor, pontos, largura=5, comp_traco=10, espaco=6):
+    if len(pontos) < 2:
+        return
+
+    dist_acumulada = 0.0
+    desenhando_segmento = True
+    
+    for i in range(len(pontos) - 1):
+        p1 = pontos[i]
+        p2 = pontos[i + 1]
+        dist_seg = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        if dist_seg == 0:
+            continue
+            
+        dx = (p2[0] - p1[0]) / dist_seg
+        dy = (p2[1] - p1[1]) / dist_seg
+        
+        progresso_seg = 0.0
+        while progresso_seg < dist_seg:
+            limite_fase = comp_traco if desenhando_segmento else espaco
+            restante_fase = limite_fase - dist_acumulada
+            passo = min(restante_fase, dist_seg - progresso_seg)
+            
+            p_inicio_sub = (p1[0] + dx * progresso_seg, p1[1] + dy * progresso_seg)
+            progresso_seg += passo
+            p_fim_sub = (p1[0] + dx * progresso_seg, p1[1] + dy * progresso_seg)
+            
+            if desenhando_segmento:
+                pygame.draw.line(superficie, cor, p_inicio_sub, p_fim_sub, largura)
+                
+            dist_acumulada += passo
+            if dist_acumulada >= limite_fase:
+                dist_acumulada = 0.0
+                desenhando_segmento = not desenhando_segmento
 
 def renderizar_texto_com_scroll(texto_completo, prefixo, largura_maxima_util, rect_x, rect_y):
-    """
-    Renderiza o prefixo fixo e realiza o corte dinâmico do texto do final para o início.
-    Garante o efeito de scroll automático para a direita à medida que o usuário escreve.
-    """
     img_prefixo = font_campo.render(prefixo, True, COR_TEXTO)
     largura_prefixo = img_prefixo.get_width()
     
@@ -106,22 +241,15 @@ def renderizar_texto_com_scroll(texto_completo, prefixo, largura_maxima_util, re
     tela.blit(img_texto_final, (rect_x + 10 + largura_prefixo, rect_y + 10))
 
 def formatar_e_validar_data(texto_atual, novo_char):
-    """
-    Formata a string para DD/MM/AAAA em tempo de execução e valida os limites numéricos.
-    """
     apenas_numeros = "".join([c for c in texto_atual if c.isdigit()])
-    
     if novo_char.isdigit():
         apenas_numeros += novo_char
-        
     if len(apenas_numeros) > 8:
         apenas_numeros = apenas_numeros[:8]
-        
     if len(apenas_numeros) >= 2:
         dia = int(apenas_numeros[0:2])
         if dia > 31 or (dia == 0 and len(apenas_numeros) == 2):
             return texto_atual  
-            
     if len(apenas_numeros) >= 4:
         mes = int(apenas_numeros[2:4])
         if mes > 12 or (mes == 0 and len(apenas_numeros) == 4):
@@ -132,33 +260,24 @@ def formatar_e_validar_data(texto_atual, novo_char):
         if idx == 2 or idx == 4:
             resultado += "/"
         resultado += num
-        
     return resultado
 
-# --- FUNÇÕES DE FASE PROCEDURAL ---
-
 def gerar_fase_por_angulo(id_fase, angulo_graus, comprimento=550):
-    centro_x = 400
-    centro_y = 300
+    centro_x, centro_y = 400, 300
     angulo_rad = math.radians(angulo_graus)
     metade_comp = comprimento / 2
     
     dx = metade_comp * math.cos(angulo_rad)
     dy = metade_comp * math.sin(angulo_rad)
     
-    x_init = int(centro_x - dx)
-    y_init = int(centro_y + dy)
-    x_end = int(centro_x + dx)
-    y_end = int(centro_y - dy)
-    
-    x_init = max(50, min(x_init, 750))
-    y_init = max(50, min(y_init, 550))
-    x_end = max(50, min(x_end, 750))
-    y_end = max(50, min(y_end, 550))
+    x_init = max(50, min(int(centro_x - dx), 750))
+    y_init = max(50, min(int(centro_y + dy), 550))
+    x_end = max(50, min(int(centro_x + dx), 750))
+    y_end = max(50, min(int(centro_y - dy), 550))
     
     return {
         "id": id_fase,
-        "nome": f"Fase Adaptativa - Angulo {angulo_graus}graus",
+        "nome": f"Fase Adaptativa - Angulo {angulo_graus}°",
         "tipo": "reta",
         "angulo": angulo_graus,
         "ponto_inicio": [x_init, y_init],
@@ -166,64 +285,46 @@ def gerar_fase_por_angulo(id_fase, angulo_graus, comprimento=550):
         "pontos_guia": []
     }
 
-def calcular_proximo_passo(precisao_anterior, angulo_atual):
-    if precisao_anterior >= 80.0:
-        novo_angulo = min(LIMITE_ANGULO_MAXIMO, angulo_atual + 2.5)
-        status = "AVANCAR_RAPIDO"
-    elif 60.0 <= precisao_anterior < 80.0:
-        novo_angulo = min(LIMITE_ANGULO_MAXIMO, angulo_atual + 1.25)
-        status = "AVANCAR_SUAVE"
-    elif 50.0 <= precisao_anterior < 60.0:
-        novo_angulo = angulo_atual
-        status = "REPETIR"
-    elif 30.0 <= precisao_anterior < 50.0:
-        novo_angulo = max(0, angulo_atual - 2.5)
-        status = "VOLTAR_UMA"
-    else:
-        novo_angulo = max(0, angulo_atual - 5)
-        status = "VOLTAR_DUAS"
-        
-    return novo_angulo, status
-
-# Inicialização do loop adaptativo
-angulo_atual = 0  
-id_fase_dinamica = 1
 fase_atual = gerar_fase_por_angulo(id_fase_dinamica, angulo_atual)
 
-coordenadas_usuario = []
-tempos_toque = []
-desenhando = False
-mensagem_status = "Conecte o ponto Verde ao Alvo Azul"
-
 # ==========================================
-#  FUNÇÕES DE DESENHO E INTERFACES DE TELA
+#  TELAS DE INTERFACE
 # ==========================================
 
-def desenhar_tela_abertura():
+def desenhar_menu_responsavel():
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
     
-    pygame.draw.circle(tela, COR_ALVO, (LARGURA // 2, ALTURA * 0.32), 60)
-    pygame.draw.circle(tela, COR_INICIO, (LARGURA // 2 - 35, ALTURA * 0.32 + 20), 20)
+    # Exibe o logotipo centralizado no topo
+    if icones.get("Logotipo"):
+        rect_logo = icones["Logotipo"].get_rect(center=(LARGURA // 2, 160))
+        tela.blit(icones["Logotipo"], rect_logo)
     
-    texto_logo = fonte_titulo.render("PlayDot", True, COR_TEXTO)
-    tela.blit(texto_logo, texto_logo.get_rect(center=(LARGURA // 2, ALTURA * 0.48)))
+    # Dimensões dos botões
+    L_BTN, A_BTN = 420, 65
     
-    btn_iniciar = pygame.Rect(0, 0, 220, 50)
-    btn_iniciar.center = (LARGURA // 2, ALTURA * 0.68)
-    cor_i = COR_BOTAO_HOVER if btn_iniciar.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_i, btn_iniciar, border_radius=10)
-    txt_btn = fonte.render("Iniciar", True, COR_TEXTO)
-    tela.blit(txt_btn, txt_btn.get_rect(center=btn_iniciar.center))
+    btn_jogar = pygame.Rect(0, 0, L_BTN, A_BTN)
+    btn_jogar.center = (LARGURA // 2, 340)
     
-    btn_sair = pygame.Rect(0, 0, 220, 50)
-    btn_sair.center = (LARGURA // 2, ALTURA * 0.78)
-    cor_s = (240, 180, 180) if btn_sair.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_s, btn_sair, border_radius=10)
-    txt_sair = fonte.render("Sair do Jogo", True, COR_TEXTO)
-    tela.blit(txt_sair, txt_sair.get_rect(center=btn_sair.center))
+    btn_configs = pygame.Rect(0, 0, L_BTN, A_BTN)
+    btn_configs.center = (LARGURA // 2, 430)
     
-    return btn_iniciar, btn_sair
+    btn_sair = pygame.Rect(0, 0, L_BTN, A_BTN)
+    btn_sair.center = (LARGURA // 2, 520)
+    
+    botoes = [
+        (btn_jogar, "Iniciar Jogo (Criança)", COR_INICIO, COR_BRANCO),
+        (btn_configs, "Configurações", COR_BOTAO, COR_TEXTO),
+        (btn_sair, "Sair do Jogo", COR_ALVO, COR_BRANCO)
+    ]
+    
+    for rect, texto, cor_padrao, cor_txt in botoes:
+        cor = COR_BOTAO_HOVER if rect.collidepoint(mouse_pos) else cor_padrao
+        pygame.draw.rect(tela, cor, rect, border_radius=12)
+        img_texto = fonte.render(texto, True, cor_txt if cor != COR_BOTAO_HOVER else COR_TEXTO)
+        tela.blit(img_texto, img_texto.get_rect(center=rect.center))
+        
+    return btn_jogar, btn_configs, btn_sair
 
 def desenhar_tela_pin_acesso(titulo="Acesso do Responsável"):
     tela.fill(COR_FUNDO)
@@ -264,72 +365,6 @@ def desenhar_tela_pin_acesso(titulo="Acesso do Responsável"):
         
     return btn_confirmar, btn_cancelar
 
-def desenhar_selecao_perfil():
-    tela.fill(COR_FUNDO)
-    mouse_pos = pygame.mouse.get_pos()
-    
-    texto_titulo = fonte_titulo.render("Quem está acessando?", True, COR_TEXTO)
-    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.25)))
-    
-    btn_resp = pygame.Rect(0, 0, 250, 80)
-    btn_resp.center = (LARGURA // 2 - 150, ALTURA * 0.52)
-    cor_resp = COR_BOTAO_HOVER if btn_resp.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_resp, btn_resp, border_radius=15)
-    txt_resp = fonte.render("Responsável", True, COR_TEXTO)
-    tela.blit(txt_resp, txt_resp.get_rect(center=btn_resp.center))
-    
-    btn_crianca = pygame.Rect(0, 0, 250, 80)
-    btn_crianca.center = (LARGURA // 2 + 150, ALTURA * 0.52)
-    cor_cri = COR_BOTAO_HOVER if btn_crianca.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_cri, btn_crianca, border_radius=15)
-    txt_cri = fonte.render("Criança", True, COR_TEXTO)
-    tela.blit(txt_cri, txt_cri.get_rect(center=btn_crianca.center))
-
-    btn_voltar = pygame.Rect(0, 0, 160, 45)
-    btn_voltar.center = (LARGURA // 2, ALTURA * 0.78)
-    cor_volt = COR_BOTAO_HOVER if btn_voltar.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_volt, btn_voltar, border_radius=10)
-    txt_volt = fonte.render("Voltar", True, COR_TEXTO)
-    tela.blit(txt_volt, txt_volt.get_rect(center=btn_voltar.center))
-    
-    return btn_resp, btn_crianca, btn_voltar
-
-def desenhar_menu_responsavel():
-    tela.fill(COR_FUNDO)
-    mouse_pos = pygame.mouse.get_pos()
-    
-    texto_titulo = fonte_titulo.render("Painel do Responsável", True, COR_TEXTO)
-    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.15)))
-    
-    L_BTN, A_BTN = 300, 50
-    
-    btn_cadastrar = pygame.Rect(0, 0, L_BTN, A_BTN)
-    btn_cadastrar.center = (LARGURA // 2, ALTURA * 0.35)
-    
-    btn_configs = pygame.Rect(0, 0, L_BTN, A_BTN)
-    btn_configs.center = (LARGURA // 2, ALTURA * 0.47)
-    
-    btn_estats = pygame.Rect(0, 0, L_BTN, A_BTN)
-    btn_estats.center = (LARGURA // 2, ALTURA * 0.59)
-    
-    btn_sair = pygame.Rect(0, 0, L_BTN, A_BTN)
-    btn_sair.center = (LARGURA // 2, ALTURA * 0.71)
-    
-    botoes = [
-        (btn_cadastrar, "Cadastrar Criança"),
-        (btn_configs, "Configurações"),
-        (btn_estats, "Estatísticas de Desempenho"),
-        (btn_sair, "Sair / Voltar")
-    ]
-    
-    for rect, texto in botoes:
-        cor = COR_BOTAO_HOVER if rect.collidepoint(mouse_pos) else COR_BOTAO
-        pygame.draw.rect(tela, cor, rect, border_radius=10)
-        img_texto = fonte.render(texto, True, COR_TEXTO)
-        tela.blit(img_texto, img_texto.get_rect(center=rect.center))
-        
-    return btn_cadastrar, btn_configs, btn_estats, btn_sair
-
 def desenhar_cadastro_crianca():
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
@@ -337,21 +372,18 @@ def desenhar_cadastro_crianca():
     texto_titulo = fonte_titulo.render("Cadastro de Criança", True, COR_TEXTO)
     tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.10)))
     
-    # Campo Nome
     rect_nome = pygame.Rect(100, 160, 600, 40)
     cor_n = COR_INPUT_ATIVO if campo_ativo == "nome" else COR_BRANCO
     pygame.draw.rect(tela, cor_n, rect_nome, border_radius=5)
     pygame.draw.rect(tela, COR_GUIA, rect_nome, width=2, border_radius=5)
     renderizar_texto_com_scroll(input_cadastro['nome'], "Nome: ", 600, 100, 160)
     
-    # Campo Data Nascimento
     rect_nasc = pygame.Rect(100, 230, 300, 40)
     cor_na = COR_INPUT_ATIVO if campo_ativo == "nascimento" else COR_BRANCO
     pygame.draw.rect(tela, cor_na, rect_nasc, border_radius=5)
     pygame.draw.rect(tela, COR_GUIA, rect_nasc, width=2, border_radius=5)
     renderizar_texto_com_scroll(input_cadastro['nascimento'], "Data Nasc.: ", 300, 100, 230)
     
-    # Botões Sexo
     rect_sexo_m = pygame.Rect(450, 230, 110, 40)
     cor_sm = COR_INPUT_ATIVO if input_cadastro["sexo"] == "Masculino" else COR_BOTAO
     pygame.draw.rect(tela, cor_sm, rect_sexo_m, border_radius=5)
@@ -361,15 +393,7 @@ def desenhar_cadastro_crianca():
     cor_sf = COR_INPUT_ATIVO if input_cadastro["sexo"] == "Feminino" else COR_BOTAO
     pygame.draw.rect(tela, cor_sf, rect_sexo_f, border_radius=5)
     tela.blit(font_campo.render("Feminino", True, COR_TEXTO), (595, 240))
-    
-    # Campo Observações
-    rect_obs = pygame.Rect(100, 310, 600, 100)
-    cor_o = COR_INPUT_ATIVO if campo_ativo == "obs" else COR_BRANCO
-    pygame.draw.rect(tela, cor_o, rect_obs, border_radius=5)
-    pygame.draw.rect(tela, COR_GUIA, rect_obs, width=2, border_radius=5)
-    renderizar_texto_com_scroll(input_cadastro['obs'], "Observações: ", 600, 100, 310)
-    
-    # Botões Confirmar e Cancelar
+
     btn_cancelar = pygame.Rect(0, 480, 180, 45)
     btn_cancelar.centerx = (LARGURA // 2) - 110  
     cor_ca = COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
@@ -384,73 +408,113 @@ def desenhar_cadastro_crianca():
     txt_co = fonte.render("Confirmar", True, COR_TEXTO)
     tela.blit(txt_co, txt_co.get_rect(center=btn_confirmar.center))
     
-    return rect_nome, rect_nasc, rect_sexo_m, rect_sexo_f, rect_obs, btn_confirmar, btn_cancelar
+    return rect_nome, rect_nasc, rect_sexo_m, rect_sexo_f, btn_confirmar, btn_cancelar
 
 def desenhar_tela_configuracoes():
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
     
     texto_titulo = fonte_titulo.render("Configurações", True, COR_TEXTO)
-    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.10)))
+    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, 45)))
     
-    tela.blit(fonte.render("Seleção de Ruído:", True, COR_TEXTO), (100, 160))
-    btn_r_baixo = pygame.Rect(320, 150, 110, 40)
-    cor_rb = COR_INPUT_ATIVO if configs_jogo["ruido"] == "Baixo" else COR_BOTAO
+    # 1. Botão de Cadastrar Nova Criança
+    btn_cadastrar_novo = pygame.Rect(50, 90, 260, 40)
+    cor_cad = COR_BOTAO_HOVER if btn_cadastrar_novo.collidepoint(mouse_pos) else COR_BOTAO
+    pygame.draw.rect(tela, cor_cad, btn_cadastrar_novo, border_radius=8)
+    tela.blit(fonte.render("+ Cadastrar Criança", True, COR_TEXTO), (70, 98))
+
+    # 2. Seleção de Criança
+    tela.blit(fonte.render("Criança Selecionada:", True, COR_TEXTO), (50, 150))
+    botoes_criancas = []
+    
+    if not lista_criancas:
+        tela.blit(font_campo.render("Nenhuma criança cadastrada.", True, (150, 150, 150)), (260, 153))
+    else:
+        for idx, cr in enumerate(lista_criancas[:3]): # Exibe até 3 botões rápidos
+            rect_cr = pygame.Rect(260 + (idx * 160), 145, 150, 35)
+            is_selected = crianca_config_selecionada and crianca_config_selecionada["id"] == cr["id"]
+            cor = COR_INPUT_ATIVO if is_selected else (COR_BOTAO_HOVER if rect_cr.collidepoint(mouse_pos) else COR_BOTAO)
+            pygame.draw.rect(tela, cor, rect_cr, border_radius=5)
+            
+            nome_curto = cr['nome'][:10] + "..." if len(cr['nome']) > 10 else cr['nome']
+            txt_c = font_campo.render(nome_curto, True, COR_TEXTO)
+            tela.blit(txt_c, txt_c.get_rect(center=rect_cr.center))
+            botoes_criancas.append((rect_cr, cr))
+
+    pygame.draw.line(tela, COR_GUIA, (50, 200), (750, 200), 2)
+
+    # 3. Configuração de Cor do Traçado para a Criança Selecionada
+    tela.blit(fonte.render("Cor do Traçado:", True, COR_TEXTO), (50, 220))
+    botoes_cores = []
+    x_cor = 240
+    for nome_cor, valor_rgb in OPCOES_CORES_TRACADO.items():
+        rect_cor = pygame.Rect(x_cor, 215, 90, 35)
+        is_sel = (cor_tracado_temp == nome_cor)
+        
+        # Borda de seleção
+        if is_sel:
+            pygame.draw.rect(tela, COR_TEXTO, rect_cor.inflate(4, 4), border_radius=7)
+            
+        pygame.draw.rect(tela, valor_rgb, rect_cor, border_radius=5)
+        txt_cor = font_campo.render(nome_cor, True, COR_BRANCO if nome_cor in ["Azul", "Verde", "Vermelho"] else COR_TEXTO)
+        tela.blit(txt_cor, txt_cor.get_rect(center=rect_cor.center))
+        botoes_cores.append((rect_cor, nome_cor))
+        x_cor += 100
+
+    # 4. Seleção de Ruído
+    tela.blit(fonte.render("Seleção de Ruído:", True, COR_TEXTO), (50, 280))
+    btn_r_baixo = pygame.Rect(240, 275, 110, 35)
+    cor_rb = COR_INPUT_ATIVO if ruido_temp == "Baixo" else COR_BOTAO
     pygame.draw.rect(tela, cor_rb, btn_r_baixo, border_radius=5)
-    tela.blit(fonte.render("Baixo", True, COR_TEXTO), (350, 158))
+    tela.blit(fonte.render("Baixo", True, COR_TEXTO), (270, 280))
     
-    btn_r_medio = pygame.Rect(450, 150, 110, 40)
-    cor_rm = COR_INPUT_ATIVO if configs_jogo["ruido"] == "Médio" else COR_BOTAO
+    btn_r_medio = pygame.Rect(360, 275, 110, 35)
+    cor_rm = COR_INPUT_ATIVO if ruido_temp == "Médio" else COR_BOTAO
     pygame.draw.rect(tela, cor_rm, btn_r_medio, border_radius=5)
-    tela.blit(fonte.render("Médio", True, COR_TEXTO), (480, 158))
-    
-    tela.blit(fonte.render(f"Brilho do Traço: {configs_jogo['brilho']}", True, COR_TEXTO), (100, 230))
-    btn_brilho_menos = pygame.Rect(320, 220, 50, 40)
-    pygame.draw.rect(tela, COR_BOTAO, btn_brilho_menos, border_radius=5)
-    tela.blit(fonte.render("-", True, COR_TEXTO), (340, 225))
-    
-    btn_brilho_mais = pygame.Rect(400, 220, 50, 40)
-    pygame.draw.rect(tela, COR_BOTAO, btn_brilho_mais, border_radius=5)
-    tela.blit(fonte.render("+", True, COR_TEXTO), (420, 225))
-    
-    tela.blit(fonte.render("Alterar PIN Parental:", True, COR_TEXTO), (100, 300))
-    rect_novo_pin = pygame.Rect(320, 290, 150, 40)
+    tela.blit(fonte.render("Médio", True, COR_TEXTO), (390, 280))
+
+    pygame.draw.line(tela, COR_GUIA, (50, 335), (750, 335), 2)
+
+    # 5. Alterar PIN Parental
+    tela.blit(fonte.render("Alterar PIN Parental:", True, COR_TEXTO), (50, 360))
+    rect_novo_pin = pygame.Rect(270, 355, 150, 40)
     cor_p = COR_INPUT_ATIVO if campo_config_ativo == "pin" else COR_BRANCO
     pygame.draw.rect(tela, cor_p, rect_novo_pin, border_radius=5)
     pygame.draw.rect(tela, COR_GUIA, rect_novo_pin, width=2, border_radius=5)
-    renderizar_texto_com_scroll(temp_pin_novo, "", 150, 320, 290)
-    
-    btn_cancelar = pygame.Rect(0, 480, 180, 45)
+    renderizar_texto_com_scroll(temp_pin_novo, "", 150, 270, 355)
+
+    # Botões Confirmar e Cancelar
+    btn_cancelar = pygame.Rect(0, 490, 180, 45)
     btn_cancelar.centerx = (LARGURA // 2) - 110
     cor_ca = COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
     pygame.draw.rect(tela, cor_ca, btn_cancelar, border_radius=10)
     txt_ca = fonte.render("Cancelar", True, COR_TEXTO)
     tela.blit(txt_ca, txt_ca.get_rect(center=btn_cancelar.center))
     
-    btn_confirmar = pygame.Rect(0, 480, 180, 45)
+    btn_confirmar = pygame.Rect(0, 490, 180, 45)
     btn_confirmar.centerx = (LARGURA // 2) + 110
     cor_co = COR_BOTAO_HOVER if btn_confirmar.collidepoint(mouse_pos) else COR_BOTAO
     pygame.draw.rect(tela, cor_co, btn_confirmar, border_radius=10)
-    txt_co = fonte.render("Confirmar", True, COR_TEXTO)
+    txt_co = fonte.render("Salvar Alterações", True, COR_TEXTO)
     tela.blit(txt_co, txt_co.get_rect(center=btn_confirmar.center))
     
-    return btn_r_baixo, btn_r_medio, btn_brilho_menos, btn_brilho_mais, rect_novo_pin, btn_confirmar, btn_cancelar
+    return btn_cadastrar_novo, botoes_criancas, botoes_cores, btn_r_baixo, btn_r_medio, rect_novo_pin, btn_confirmar, btn_cancelar
 
 def desenhar_menu_crianca():
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
     
-    texto_titulo = fonte_titulo.render("Selecione a Criança", True, COR_TEXTO)
+    texto_titulo = fonte_titulo.render("Selecione a Criança que vai Jogar", True, COR_TEXTO)
     tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.15)))
     
     retangulos_criancas = []
     
     if not lista_criancas:
-        txt_vazio = fonte.render("Nenhuma criança cadastrada. Acesse o painel do Responsável.", True, (150, 150, 150))
+        txt_vazio = fonte.render("Nenhuma criança cadastrada. Acesse as Configurações.", True, (150, 150, 150))
         tela.blit(txt_vazio, txt_vazio.get_rect(center=(LARGURA // 2, ALTURA * 0.45)))
     else:
         for idx, crianca in enumerate(lista_criancas):
-            rect_p = pygame.Rect(150, 200 + (idx * 80), 500, 60)
+            rect_p = pygame.Rect(150, 180 + (idx * 70), 500, 55)
             
             if crianca_selecionada and crianca_selecionada["id"] == crianca["id"]:
                 cor = COR_INPUT_ATIVO
@@ -458,20 +522,20 @@ def desenhar_menu_crianca():
                 cor = COR_BOTAO_HOVER if rect_p.collidepoint(mouse_pos) else COR_BOTAO
                 
             pygame.draw.rect(tela, cor, rect_p, border_radius=10)
-            txt_nome = fonte.render(f"{crianca['nome']} ({crianca['nascimento']})", True, COR_TEXTO)
-            tela.blit(txt_nome, (180, 215 + (idx * 80)))
+            txt_nome = fonte.render(f"{crianca['nome']} ({crianca['nascimento']}) - {crianca['sexo']}", True, COR_TEXTO)
+            tela.blit(txt_nome, (180, 195 + (idx * 70)))
             
             retangulos_criancas.append((rect_p, crianca))
         
     btn_continuar = pygame.Rect(0, 0, 220, 50)
-    btn_continuar.center = (LARGURA // 2, ALTURA * 0.78)
+    btn_continuar.center = (LARGURA // 2, ALTURA * 0.82)
     
     cor_btn = COR_BOTAO
     if crianca_selecionada:
         cor_btn = COR_BOTAO_HOVER if btn_continuar.collidepoint(mouse_pos) else COR_INICIO
         
     pygame.draw.rect(tela, cor_btn, btn_continuar, border_radius=10)
-    txt_btn = fonte.render("Continuar", True, COR_BRANCO if crianca_selecionada else COR_TEXTO)
+    txt_btn = fonte.render("Iniciar Jogo", True, COR_BRANCO if crianca_selecionada else COR_TEXTO)
     tela.blit(txt_btn, txt_btn.get_rect(center=btn_continuar.center))
     
     btn_voltar = pygame.Rect(50, 500, 120, 40)
@@ -480,36 +544,6 @@ def desenhar_menu_crianca():
     tela.blit(fonte.render("Voltar", True, COR_TEXTO), (85, 508))
     
     return retangulos_criancas, btn_continuar, btn_voltar
-
-def desenhar_seletor_jogador():
-    tela.fill(COR_FUNDO)
-    mouse_pos = pygame.mouse.get_pos()
-    
-    texto_titulo = fonte_titulo.render("Quem irá jogar?", True, COR_TEXTO)
-    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.2)))
-    
-    btn_sozinha = pygame.Rect(0, 0, 320, 80)
-    btn_sozinha.center = (LARGURA // 2, ALTURA * 0.42)
-    cor_s = COR_BOTAO_HOVER if btn_sozinha.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_s, btn_sozinha, border_radius=15)
-    txt_s = fonte.render("Criança (Treinar sozinho)", True, COR_TEXTO)
-    tela.blit(txt_s, txt_s.get_rect(center=btn_sozinha.center))
-    
-    btn_mediado = pygame.Rect(0, 0, 320, 80)
-    btn_mediado.center = (LARGURA // 2, ALTURA * 0.60)
-    cor_m = COR_BOTAO_HOVER if btn_mediado.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_m, btn_mediado, border_radius=15)
-    txt_m = fonte.render("Criança + Mediador", True, COR_TEXTO)
-    tela.blit(txt_m, txt_m.get_rect(center=btn_mediado.center))
-    
-    btn_voltar = pygame.Rect(0, 0, 200, 45)
-    btn_voltar.center = (LARGURA // 2, ALTURA * 0.82)
-    cor_v = COR_BOTAO_HOVER if btn_voltar.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_v, btn_voltar, border_radius=10)
-    txt_v = fonte.render("Cancelar", True, COR_TEXTO)
-    tela.blit(txt_v, txt_v.get_rect(center=btn_voltar.center))
-    
-    return btn_sozinha, btn_mediado, btn_voltar
 
 def desenhar_tela_estatisticas():
     tela.fill(COR_FUNDO)
@@ -575,39 +609,28 @@ def desenhar_tela_estatisticas():
 rodando = True
 while rodando:
     
-    # ------------------ TELA 1: ABERTURA ------------------
-    if estado_jogo == "ABERTURA":
-        btn_iniciar, btn_sair = desenhar_tela_abertura()
+   # ------------------ MENU PRINCIPAL ------------------
+    if estado_jogo == "MENU_RESPONSAVEL":
+        btn_jogar, btn_configs, btn_sair = desenhar_menu_responsavel()
         
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 rodando = False
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
-                if btn_iniciar.collidepoint(evento.pos):
-                    estado_jogo = "SELECAO_PERFIL"
-                elif btn_sair.collidepoint(evento.pos):
-                    rodando = False  
-
-    # ------------------ TELA 3: SELEÇÃO DE PERFIL ------------------
-    elif estado_jogo == "SELECAO_PERFIL":
-        btn_resp, btn_crianca, btn_voltar = desenhar_selecao_perfil()
-        
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT:
-                rodando = False
-            elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
-                if btn_resp.collidepoint(evento.pos):
+                if btn_jogar.collidepoint(evento.pos):
+                    lista_criancas = obter_criancas() if db_ativo else []
+                    estado_jogo = "MENU_CRIANCA"
+                elif btn_configs.collidepoint(evento.pos):
+                    destino_apos_pin = "CONFIGURACOES"
                     estado_jogo = "PIN_ACESSO"
                     pin_digitado = ""
                     mensagem_erro_pin = ""
-                elif btn_crianca.collidepoint(evento.pos):
-                    estado_jogo = "MENU_CRIANCA"
-                elif btn_voltar.collidepoint(evento.pos):
-                    estado_jogo = "ABERTURA"  
+                elif btn_sair.collidepoint(evento.pos):
+                    rodando = False
 
-    # ------------------ TELAS 2 E 4: SISTEMA DE PIN ------------------
+    # ------------------ SISTEMA DE PIN ------------------
     elif estado_jogo == "PIN_ACESSO":
-        btn_confirmar, btn_cancelar = desenhar_tela_pin_acesso("Controle Parental")
+        btn_confirmar, btn_cancelar = desenhar_tela_pin_acesso("Acesso do Responsável")
         
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -620,37 +643,31 @@ while rodando:
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 if btn_confirmar.collidepoint(evento.pos):
                     if pin_digitado == configs_jogo["pin"]:
-                        estado_jogo = "MENU_RESPONSAVEL"
+                        if destino_apos_pin == "CONFIGURACOES":
+                            temp_pin_novo = configs_jogo["pin"]
+                            ruido_temp = configs_jogo.get("ruido", "Baixo")
+                            lista_criancas = obter_criancas() if db_ativo else []
+                            crianca_config_selecionada = lista_criancas[0] if lista_criancas else None
+                            
+                            # Carrega a cor configurada para a criança
+                            if crianca_config_selecionada:
+                                id_str = str(crianca_config_selecionada["id"])
+                                cor_tracado_temp = configs_jogo.get("config_criancas", {}).get(id_str, {}).get("cor_tracado", "Azul")
+                            else:
+                                cor_tracado_temp = "Azul"
+                                
+                            campo_config_ativo = None
+                        
+                        estado_jogo = destino_apos_pin
                     else:
                         mensagem_erro_pin = "PIN inválido! Digite o PIN correto."
                         pin_digitado = ""
                 elif btn_cancelar.collidepoint(evento.pos):
-                    estado_jogo = "SELECAO_PERFIL"
+                    estado_jogo = "MENU_RESPONSAVEL"
 
-    # ------------------ TELA 5: MENU DO RESPONSÁVEL ------------------
-    elif estado_jogo == "MENU_RESPONSAVEL":
-        btn_cadastrar, btn_configs, btn_estats, btn_sair = desenhar_menu_responsavel()
-        
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT:
-                rodando = False
-            elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
-                if btn_cadastrar.collidepoint(evento.pos):
-                    estado_jogo = "CADASTRO_CRIANCA"
-                    input_cadastro = {"nome": "", "nascimento": "", "sexo": "Masculino", "obs": ""}
-                    campo_ativo = None
-                elif btn_configs.collidepoint(evento.pos):
-                    estado_jogo = "CONFIGURACOES"
-                    temp_pin_novo = configs_jogo["pin"]
-                    campo_config_ativo = None
-                elif btn_estats.collidepoint(evento.pos):
-                    estado_jogo = "ESTATISTICAS"
-                elif btn_sair.collidepoint(evento.pos):
-                    estado_jogo = "SELECAO_PERFIL"
-
-    # ------------------ TELA 6: CADASTRO DE CRIANÇA ------------------
+    # ------------------ CADASTRO DE CRIANÇA ------------------
     elif estado_jogo == "CADASTRO_CRIANCA":
-        r_nome, r_nasc, r_sm, r_sf, r_obs, btn_conf, btn_canc = desenhar_cadastro_crianca()
+        r_nome, r_nasc, r_sm, r_sf, btn_conf, btn_canc = desenhar_cadastro_crianca()
         
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -660,8 +677,6 @@ while rodando:
                     campo_ativo = "nome"
                 elif r_nasc.collidepoint(evento.pos):
                     campo_ativo = "nascimento"
-                elif r_obs.collidepoint(evento.pos):
-                    campo_ativo = "obs"
                 elif r_sm.collidepoint(evento.pos):
                     input_cadastro["sexo"] = "Masculino"
                 elif r_sf.collidepoint(evento.pos):
@@ -679,9 +694,9 @@ while rodando:
                                 lista_criancas = obter_criancas()
                             except Exception as e:
                                 print(f"Erro ao salvar no banco local: {e}")
-                    estado_jogo = "MENU_RESPONSAVEL"
+                    estado_jogo = "CONFIGURACOES"
                 elif btn_canc.collidepoint(evento.pos):
-                    estado_jogo = "MENU_RESPONSAVEL"
+                    estado_jogo = "CONFIGURACOES"
             elif evento.type == pygame.KEYDOWN and campo_ativo:
                 if evento.key == pygame.K_BACKSPACE:
                     if campo_ativo == "nascimento" and len(input_cadastro["nascimento"]) > 0:
@@ -700,37 +715,68 @@ while rodando:
                     else:
                         input_cadastro[campo_ativo] += evento.unicode
 
-    # ------------------ TELA 7: CONFIGURAÇÕES ------------------
+    # ------------------ CONFIGURAÇÕES ------------------
     elif estado_jogo == "CONFIGURACOES":
-        btn_rb, btn_rm, btn_b_menos, btn_b_mais, r_pin, btn_conf, btn_canc = desenhar_tela_configuracoes()
+        btn_cad, btns_cr, btns_cor, btn_rb, btn_rm, r_pin, btn_conf, btn_canc = desenhar_tela_configuracoes()
         
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 rodando = False
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                if btn_cad.collidepoint(evento.pos):
+                    input_cadastro = {"nome": "", "nascimento": "", "sexo": "Masculino", "obs": ""}
+                    campo_ativo = None
+                    estado_jogo = "CADASTRO_CRIANCA"
+                    
+                # Seleção de Criança
+                for r_c, cr in btns_cr:
+                    if r_c.collidepoint(evento.pos):
+                        crianca_config_selecionada = cr
+                        id_str = str(cr["id"])
+                        cor_tracado_temp = configs_jogo.get("config_criancas", {}).get(id_str, {}).get("cor_tracado", "Azul")
+
+                # Seleção de Cor
+                for r_cor, nome_cor in btns_cor:
+                    if r_cor.collidepoint(evento.pos):
+                        cor_tracado_temp = nome_cor
+
+                # Ruído
                 if btn_rb.collidepoint(evento.pos):
-                    configs_jogo["ruido"] = "Baixo"
+                    ruido_temp = "Baixo"
                 elif btn_rm.collidepoint(evento.pos):
-                    configs_jogo["ruido"] = "Médio"
-                elif btn_b_menos.collidepoint(evento.pos):
-                    configs_jogo["brilho"] = max(50, configs_jogo["brilho"] - 25)
-                elif btn_b_mais.collidepoint(evento.pos):
-                    configs_jogo["brilho"] = min(255, configs_jogo["brilho"] + 25)
+                    ruido_temp = "Médio"
+                    
                 elif r_pin.collidepoint(evento.pos):
                     campo_config_ativo = "pin"
+                    
                 elif btn_conf.collidepoint(evento.pos):
                     if len(temp_pin_novo) == 4:
                         configs_jogo["pin"] = temp_pin_novo
+                    configs_jogo["ruido"] = ruido_temp
+                    
+                    # Salva preferências específicas da criança selecionada
+                    if crianca_config_selecionada:
+                        id_str = str(crianca_config_selecionada["id"])
+                        if "config_criancas" not in configs_jogo:
+                            configs_jogo["config_criancas"] = {}
+                        configs_jogo["config_criancas"][id_str] = {
+                            "cor_tracado": cor_tracado_temp
+                        }
+                        
+                    salvar_configuracoes(configs_jogo)
                     estado_jogo = "MENU_RESPONSAVEL"
+                    
                 elif btn_canc.collidepoint(evento.pos):
+                    configs_jogo = carregar_configuracoes()
                     estado_jogo = "MENU_RESPONSAVEL"
+
             elif evento.type == pygame.KEYDOWN and campo_config_ativo == "pin":
                 if evento.key == pygame.K_BACKSPACE:
                     temp_pin_novo = temp_pin_novo[:-1]
                 elif len(temp_pin_novo) < 4 and evento.unicode.isdigit():
                     temp_pin_novo += evento.unicode
 
-    # ------------------ TELA 8: SELEÇÃO DA CRIANÇA ------------------
+    # ------------------ SELEÇÃO DA CRIANÇA PARA O JOGO ------------------
     elif estado_jogo == "MENU_CRIANCA":
         recs_criancas, btn_cont, btn_volt = desenhar_menu_crianca()
         
@@ -742,31 +788,20 @@ while rodando:
                     if rect.collidepoint(evento.pos):
                         crianca_selecionada = crianca
                 if btn_volt.collidepoint(evento.pos):
-                    estado_jogo = "SELECAO_PERFIL"
+                    estado_jogo = "MENU_RESPONSAVEL"
                 elif btn_cont.collidepoint(evento.pos) and crianca_selecionada:
-                    estado_jogo = "SELETOR_JOGADOR"
-
-    # ------------------ TELA 9: SELETOR DE MODALIDADE ------------------
-    elif estado_jogo == "SELETOR_JOGADOR":
-        btn_soz, btn_med, btn_volt = desenhar_seletor_jogador()
-        
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT:
-                rodando = False
-            elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
-                if btn_volt.collidepoint(evento.pos):
-                    estado_jogo = "MENU_CRIANCA"
-                elif btn_soz.collidepoint(evento.pos) or btn_med.collidepoint(evento.pos):
                     estado_jogo = "JOGANDO"
-                    angulo_atual = 0
+                    angulo_atual = 0.0
                     id_fase_dinamica = 1
+                    tentativas_precisoes = []
+                    tentativa_atual_num = 1
                     fase_atual = gerar_fase_por_angulo(id_fase_dinamica, angulo_atual)
-                    fase_concluida = False
                     jogo_finalizado = False
                     coordenadas_usuario = []
+                    coordenadas_salvas_para_desenho = []
                     tempos_toque = []
                     desenhando = False
-                    mensagem_status = "Conecte o ponto Verde ao Alvo Azul"
+                    mensagem_status = f"Tentativa 1 de 5: Leve o Cão até a Casinha!"
 
     # ------------------ TELA DE ESTATÍSTICAS ------------------
     elif estado_jogo == "ESTATISTICAS":
@@ -779,34 +814,26 @@ while rodando:
                 if btn_voltar.collidepoint(evento.pos):
                     estado_jogo = "MENU_RESPONSAVEL"
 
-    # ------------------ TELA 10: AMBIENTE DE JOGO ------------------
+    # ------------------ TELA DE JOGO ------------------
     elif estado_jogo == "JOGANDO":
         p_init = fase_atual["ponto_inicio"]
         p_end = fase_atual["ponto_fim"]
         mouse_pos = pygame.mouse.get_pos()
         
+        # Cor do traçado baseada nas configurações da criança selecionada
+        cor_nome = "Azul"
+        if crianca_selecionada:
+            id_str = str(crianca_selecionada["id"])
+            cor_nome = configs_jogo.get("config_criancas", {}).get(id_str, {}).get("cor_tracado", "Azul")
+        cor_rastro_atual = OPCOES_CORES_TRACADO.get(cor_nome, (70, 130, 180))
+
         largura_btn_sair = 110
         btn_sair_jogo = pygame.Rect(LARGURA - largura_btn_sair - 25, 20, largura_btn_sair, 35)
         
-        largura_botoes_fase = 180
-        altura_botoes_fase = 45
-        espacamento_botoes = 40
-        largura_conjunto = (largura_botoes_fase * 2) + espacamento_botoes
-        
-        pos_inicial_x = (LARGURA - largura_conjunto) // 2
-        y_botoes_fase = 495
-        
-        btn_repetir = pygame.Rect(pos_inicial_x, y_botoes_fase, largura_botoes_fase, altura_botoes_fase)
-        btn_continuar = pygame.Rect(pos_inicial_x + largura_botoes_fase + espacamento_botoes, y_botoes_fase, largura_botoes_fase, altura_botoes_fase)
-        
         texto_fim = "Voltar ao Menu Principal"
         texto_fim_largura, texto_fim_altura = fonte.size(texto_fim)
-        
-        largura_btn_fim = texto_fim_largura + 50
-        altura_btn_fim = texto_fim_altura + 20
-        
-        btn_menu_fim = pygame.Rect(0, 0, largura_btn_fim, altura_btn_fim)
-        btn_menu_fim.center = (LARGURA // 2, y_botoes_fase + (altura_botoes_fase // 2))
+        btn_menu_fim = pygame.Rect(0, 0, texto_fim_largura + 50, texto_fim_altura + 20)
+        btn_menu_fim.center = (LARGURA // 2, 510)
 
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -815,42 +842,17 @@ while rodando:
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 if jogo_finalizado:
                     if btn_menu_fim.collidepoint(evento.pos):
-                        estado_jogo = "SELECAO_PERFIL"
-                
-                elif fase_concluida:
-                    if btn_repetir.collidepoint(evento.pos):
-                        fase_concluida = False
-                        coordenadas_usuario = []
-                        tempos_toque = []
-                        mensagem_status = "Treinando novamente a mesma fase!"
-                    elif btn_continuar.collidepoint(evento.pos):
-                        angulo_atual = resultado_rodada["novo_angulo"]
-                        
-                        if angulo_atual >= LIMITE_ANGULO_MAXIMO:
-                            jogo_finalizado = True
-                            mensagem_status = f"Desafio Concluído! Limite de {LIMITE_ANGULO_MAXIMO}° vencido!"
-                        else:
-                            if "AVANCAR" in resultado_rodada["status"]:
-                                id_fase_dinamica += 1
-                            elif resultado_rodada["status"] == "VOLTAR_UMA":
-                                id_fase_dinamica = max(1, id_fase_dinamica - 1)
-                            elif resultado_rodada["status"] == "VOLTAR_DUAS":
-                                id_fase_dinamica = max(1, id_fase_dinamica - 2)
-                                
-                            fase_atual = gerar_fase_por_angulo(id_fase_dinamica, angulo_atual)
-                            fase_concluida = False
-                            coordenadas_usuario = []
-                            tempos_toque = []
-                            mensagem_status = "Conecte o ponto Verde ao Alvo Azul"
+                        estado_jogo = "MENU_RESPONSAVEL"
                 else:
                     if btn_sair_jogo.collidepoint(evento.pos):
-                        estado_jogo = "SELECAO_PERFIL"
-                        
-                    dist_inicio = math.sqrt((evento.pos[0] - p_init[0])**2 + (evento.pos[1] - p_init[1])**2)
-                    if dist_inicio <= 20: 
-                        desenhando = True
-                        coordenadas_usuario = [evento.pos]
-                        tempos_toque = [time.time()]
+                        estado_jogo = "MENU_RESPONSAVEL"
+                    else:
+                        dist_inicio = math.sqrt((evento.pos[0] - p_init[0])**2 + (evento.pos[1] - p_init[1])**2)
+                        if dist_inicio <= 35: 
+                            desenhando = True
+                            coordenadas_usuario = [evento.pos]
+                            coordenadas_salvas_para_desenho = []
+                            tempos_toque = [time.time()]
                         
             elif evento.type == pygame.MOUSEMOTION and desenhando:
                 coordenadas_usuario.append(evento.pos)
@@ -860,7 +862,7 @@ while rodando:
                 desenhando = False
                 dist_alvo = math.sqrt((evento.pos[0] - p_end[0])**2 + (evento.pos[1] - p_end[1])**2)
                 
-                if dist_alvo <= 25:
+                if dist_alvo <= 35:
                     precisao, hesitacao = calcular_metricas(
                         fase_atual["tipo"], p_init, p_end, 
                         fase_atual.get("pontos_guia", []), coordenadas_usuario, tempos_toque
@@ -871,59 +873,70 @@ while rodando:
                         try: salvar_tentativa(fase_atual["nome"], tempo_total, precisao, hesitacao)
                         except: pass
                     
-                    novo_ang, status = calcular_proximo_passo(precisao, angulo_atual)
-                    
-                    resultado_rodada = {
-                        "precisao": precisao,
-                        "tempo": tempo_total,
-                        "novo_angulo": novo_ang,
-                        "status": status
-                    }
-                    
-                    coordenadas_salvas_para_desenho = list(coordenadas_usuario)
-                    
-                    if status == "REPETIR":
-                        coordenadas_usuario = []
-                        tempos_toque = []
-                        mensagem_status = f"Precisão: {precisao:.1f}%. Repetindo fase automaticamente..."
-                    else:
-                        fase_concluida = True
-                        mensagem_status = f"Traçado Realizado! Precisão: {precisao:.1f}%"
-                else:
-                    mensagem_status = "Soltou fora do alvo! Repetindo automaticamente."
+                    tentativas_precisoes.append(precisao)
                     coordenadas_usuario = []
+                    coordenadas_salvas_para_desenho = []
                     tempos_toque = []
                     
-        # --- DESENHO DO AMBIENTE ---
+                    if len(tentativas_precisoes) >= 5:
+                        media_precisao = sum(tentativas_precisoes) / 5.0
+                        
+                        if media_precisao >= 50.0:
+                            angulo_atual = min(LIMITE_ANGULO_MAXIMO, angulo_atual + 1.5)
+                            id_fase_dinamica += 1
+                            
+                            if angulo_atual >= LIMITE_ANGULO_MAXIMO:
+                                jogo_finalizado = True
+                                mensagem_status = f"Parabéns! Média {media_precisao:.1f}%. Limite de {LIMITE_ANGULO_MAXIMO}° alcançado!"
+                            else:
+                                mensagem_status = f"Média: {media_precisao:.1f}% (>=50%). Subindo +1.5° -> Ângulo: {angulo_atual}°"
+                        else:
+                            angulo_atual = max(0.0, angulo_atual - 1.5)
+                            mensagem_status = f"Média: {media_precisao:.1f}% (<50%). Voltando -1.5° -> Ângulo: {angulo_atual}°"
+                        
+                        tentativas_precisoes = []
+                        tentativa_atual_num = 1
+                        fase_atual = gerar_fase_por_angulo(id_fase_dinamica, angulo_atual)
+                    else:
+                        tentativa_atual_num = len(tentativas_precisoes) + 1
+                        mensagem_status = f"Tentativa {tentativa_atual_num} de 5 (Última precisão: {precisao:.1f}%)"
+                else:
+                    mensagem_status = f"Soltou fora da Casinha! Repetindo tentativa {tentativa_atual_num} de 5."
+                    coordenadas_usuario = []
+                    coordenadas_salvas_para_desenho = []
+                    tempos_toque = []
+                    
+        # DESENHO DA TELA DE JOGO
         tela.fill(COR_FUNDO)
         
-        pygame.draw.line(tela, COR_GUIA, p_init, p_end, 6)
-        pygame.draw.circle(tela, COR_INICIO, p_init, 20)
-        pygame.draw.circle(tela, COR_ALVO, p_end, 25)
+        desenhar_linha_tracejada(tela, COR_GUIA, p_init, p_end, largura=6, comp_traco=15, espaco=10)
         
-        if fase_concluida or jogo_finalizado:
-            if len(coordenadas_salvas_para_desenho) > 1:
-                pygame.draw.lines(tela, COR_RASTRO, False, coordenadas_salvas_para_desenho, 4)
+        if len(coordenadas_usuario) > 1:
+            desenhar_rastro_tracejada(tela, cor_rastro_atual, coordenadas_usuario, largura=5, comp_traco=10, espaco=6)
+
+        img_casinha = icones["Casinha"]
+        if img_casinha:
+            rect_casinha = img_casinha.get_rect(center=p_end)
+            tela.blit(img_casinha, rect_casinha)
         else:
-            if len(coordenadas_usuario) > 1:
-                pygame.draw.lines(tela, COR_RASTRO, False, coordenadas_usuario, 4)
+            pygame.draw.circle(tela, COR_ALVO, p_end, 25)
+
+        img_mascote = icones.get("Cão")
+        pos_mascote = p_init
+        if desenhando and len(coordenadas_usuario) > 0:
+            pos_mascote = coordenadas_usuario[-1]
+            
+        if img_mascote:
+            rect_mascote = img_mascote.get_rect(center=pos_mascote)
+            tela.blit(img_mascote, rect_mascote)
+        else:
+            pygame.draw.circle(tela, COR_INICIO, pos_mascote, 20)
                 
         if jogo_finalizado:
             cor_mf = COR_BOTAO_HOVER if btn_menu_fim.collidepoint(mouse_pos) else COR_INICIO
             pygame.draw.rect(tela, cor_mf, btn_menu_fim, border_radius=10)
             txt_fim_img = fonte.render(texto_fim, True, COR_BRANCO)
             tela.blit(txt_fim_img, txt_fim_img.get_rect(center=btn_menu_fim.center))
-            
-        elif fase_concluida:
-            cor_rep = COR_BOTAO_HOVER if btn_repetir.collidepoint(mouse_pos) else COR_BOTAO
-            pygame.draw.rect(tela, cor_rep, btn_repetir, border_radius=10)
-            txt_rep_img = fonte.render("Repetir Fase", True, COR_TEXTO)
-            tela.blit(txt_rep_img, txt_rep_img.get_rect(center=btn_repetir.center))
-            
-            cor_av = COR_BOTAO_HOVER if btn_continuar.collidepoint(mouse_pos) else COR_INICIO
-            pygame.draw.rect(tela, cor_av, btn_continuar, border_radius=10)
-            txt_av_img = fonte.render("Avançar", True, COR_BRANCO)
-            tela.blit(txt_av_img, txt_av_img.get_rect(center=btn_continuar.center))
         else:
             cor_sj = COR_BOTAO_HOVER if btn_sair_jogo.collidepoint(mouse_pos) else COR_BOTAO
             pygame.draw.rect(tela, cor_sj, btn_sair_jogo, border_radius=5)
@@ -931,7 +944,7 @@ while rodando:
             tela.blit(txt_sair_img, txt_sair_img.get_rect(center=btn_sair_jogo.center))
 
         tela.blit(fonte.render(mensagem_status, True, COR_TEXTO), (20, 20))
-        tela.blit(fonte.render(f"Fase Atual: Ângulo {angulo_atual}°", True, COR_TEXTO), (20, ALTURA - 40))
+        tela.blit(fonte.render(f"Fase Atual: Ângulo {angulo_atual}° | Cor Traço: {cor_nome} | Progresso: {len(tentativas_precisoes)}/5", True, COR_TEXTO), (20, ALTURA - 40))
 
     pygame.display.flip()
     relogio.tick(60)
