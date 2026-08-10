@@ -1,0 +1,11 @@
+{
+    "ruido": "Baixo",
+    "pin": "0000",
+    "config_criancas": {
+        "3": {
+            "cor_tracado": "Amarelo"
+        }
+    },
+    "brilho": 200,
+    "mascote": "Cão"
+}
