@@ -262,18 +262,19 @@ def formatar_e_validar_data(texto_atual, novo_char):
         resultado += num
     return resultado
 
-def gerar_fase_por_angulo(id_fase, angulo_graus, comprimento=550):
-    centro_x, centro_y = 400, 300
+def gerar_fase_por_angulo(id_fase, angulo_graus, comprimento=700):
+    centro_x, centro_y = LARGURA // 2, ALTURA // 2  # (640, 360)
+    
     angulo_rad = math.radians(angulo_graus)
     metade_comp = comprimento / 2
     
     dx = metade_comp * math.cos(angulo_rad)
     dy = metade_comp * math.sin(angulo_rad)
     
-    x_init = max(50, min(int(centro_x - dx), 750))
-    y_init = max(50, min(int(centro_y + dy), 550))
-    x_end = max(50, min(int(centro_x + dx), 750))
-    y_end = max(50, min(int(centro_y - dy), 550))
+    x_init = max(100, min(int(centro_x - dx), LARGURA - 100))
+    y_init = max(100, min(int(centro_y + dy), ALTURA - 100))
+    x_end = max(100, min(int(centro_x + dx), LARGURA - 100))
+    y_end = max(100, min(int(centro_y - dy), ALTURA - 100))
     
     return {
         "id": id_fase,
@@ -365,185 +366,362 @@ def desenhar_tela_pin_acesso(titulo="Acesso do Responsável"):
         
     return btn_confirmar, btn_cancelar
 
-def desenhar_cadastro_crianca():
+def desenhar_menu_crianca():
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
-    
-    texto_titulo = fonte_titulo.render("Cadastro de Criança", True, COR_TEXTO)
-    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.10)))
-    
-    rect_nome = pygame.Rect(100, 160, 600, 40)
-    cor_n = COR_INPUT_ATIVO if campo_ativo == "nome" else COR_BRANCO
-    pygame.draw.rect(tela, cor_n, rect_nome, border_radius=5)
-    pygame.draw.rect(tela, COR_GUIA, rect_nome, width=2, border_radius=5)
-    renderizar_texto_com_scroll(input_cadastro['nome'], "Nome: ", 600, 100, 160)
-    
-    rect_nasc = pygame.Rect(100, 230, 300, 40)
-    cor_na = COR_INPUT_ATIVO if campo_ativo == "nascimento" else COR_BRANCO
-    pygame.draw.rect(tela, cor_na, rect_nasc, border_radius=5)
-    pygame.draw.rect(tela, COR_GUIA, rect_nasc, width=2, border_radius=5)
-    renderizar_texto_com_scroll(input_cadastro['nascimento'], "Data Nasc.: ", 300, 100, 230)
-    
-    rect_sexo_m = pygame.Rect(450, 230, 110, 40)
-    cor_sm = COR_INPUT_ATIVO if input_cadastro["sexo"] == "Masculino" else COR_BOTAO
-    pygame.draw.rect(tela, cor_sm, rect_sexo_m, border_radius=5)
-    tela.blit(font_campo.render("Masculino", True, COR_TEXTO), (460, 240))
-    
-    rect_sexo_f = pygame.Rect(580, 230, 110, 40)
-    cor_sf = COR_INPUT_ATIVO if input_cadastro["sexo"] == "Feminino" else COR_BOTAO
-    pygame.draw.rect(tela, cor_sf, rect_sexo_f, border_radius=5)
-    tela.blit(font_campo.render("Feminino", True, COR_TEXTO), (595, 240))
 
-    btn_cancelar = pygame.Rect(0, 480, 180, 45)
-    btn_cancelar.centerx = (LARGURA // 2) - 110  
-    cor_ca = COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_ca, btn_cancelar, border_radius=10)
-    txt_ca = fonte.render("Cancelar", True, COR_TEXTO)
-    tela.blit(txt_ca, txt_ca.get_rect(center=btn_cancelar.center))
-    
-    btn_confirmar = pygame.Rect(0, 480, 180, 45)
-    btn_confirmar.centerx = (LARGURA // 2) + 110  
-    cor_co = COR_BOTAO_HOVER if btn_confirmar.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_co, btn_confirmar, border_radius=10)
-    txt_co = fonte.render("Confirmar", True, COR_TEXTO)
-    tela.blit(txt_co, txt_co.get_rect(center=btn_confirmar.center))
-    
-    return rect_nome, rect_nasc, rect_sexo_m, rect_sexo_f, btn_confirmar, btn_cancelar
+    # Título da tela
+    img_titulo = fonte_titulo.render("Quem vai jogar hoje?", True, COR_TEXTO)
+    tela.blit(img_titulo, img_titulo.get_rect(center=(LARGURA // 2, 80)))
+
+    recs_criancas = []
+
+    if not lista_criancas:
+        img_aviso = fonte.render(
+            "Nenhuma criança cadastrada ainda.", True, COR_TEXTO
+        )
+        tela.blit(
+            img_aviso, img_aviso.get_rect(center=(LARGURA // 2, ALTURA // 2))
+        )
+    else:
+        # Configuração da Grade (3 Colunas)
+        COLUNAS = 3
+        largura_card, altura_card = 280, 110
+        espacamento_x, espacamento_y = 30, 25
+
+        # Posição inicial Y
+        inicio_y = 170
+
+        # Centralização Horizontal da Grade na Tela
+        largura_total_grid = (COLUNAS * largura_card) + (
+            (COLUNAS - 1) * espacamento_x
+        )
+        inicio_x = (LARGURA - largura_total_grid) // 2
+
+        for idx, cr in enumerate(lista_criancas):
+            col = idx % COLUNAS
+            lin = idx // COLUNAS
+
+            x = inicio_x + col * (largura_card + espacamento_x)
+            y = inicio_y + lin * (altura_card + espacamento_y)
+
+            rect_card = pygame.Rect(x, y, largura_card, altura_card)
+
+            # Efeito Hover / Seleção
+            sel = (
+                crianca_selecionada
+                and crianca_selecionada.get("id") == cr.get("id")
+            )
+            if sel:
+                cor_fundo = COR_INPUT_ATIVO
+                cor_borda = COR_DESTAQUE
+            elif rect_card.collidepoint(mouse_pos):
+                cor_fundo = COR_BOTAO_HOVER
+                cor_borda = COR_GUIA
+            else:
+                cor_fundo = COR_BRANCO
+                cor_borda = COR_GUIA
+
+            # Desenha o Card
+            pygame.draw.rect(tela, cor_fundo, rect_card, border_radius=15)
+            pygame.draw.rect(
+                tela, cor_borda, rect_card, width=3 if sel else 2, border_radius=15
+            )
+
+            # Texto 1: Nome da Criança
+            nome = cr.get("nome", f"Criança {idx+1}")
+            img_nome = fonte.render(nome, True, COR_TEXTO)
+            tela.blit(
+                img_nome,
+                img_nome.get_rect(
+                    center=(rect_card.centerx, rect_card.top + 38)
+                ),
+            )
+
+            # Texto 2: Data de Nascimento
+            nasc = cr.get("nascimento", "")
+            texto_nasc = f"Nasc: {nasc}" if nasc else ""
+            if texto_nasc:
+                img_nasc = font_campo.render(texto_nasc, True, (100, 100, 100))
+                tela.blit(
+                    img_nasc,
+                    img_nasc.get_rect(
+                        center=(rect_card.centerx, rect_card.top + 75)
+                    ),
+                )
+
+            recs_criancas.append((rect_card, cr))
+
+    # Botões Inferiores (Continuar / Voltar)
+    btn_cont = pygame.Rect(0, 0, 220, 50)
+    btn_cont.center = (LARGURA // 2 + 130, ALTURA - 70)
+
+    btn_volt = pygame.Rect(0, 0, 220, 50)
+    btn_volt.center = (LARGURA // 2 - 130, ALTURA - 70)
+
+    # Estilização dos Botões
+    cor_btn_cont = (
+        COR_INICIO if crianca_selecionada else (200, 200, 200)
+    )  # Fica cinza se nenhuma estiver selecionada
+    pygame.draw.rect(tela, cor_btn_cont, btn_cont, border_radius=10)
+    img_c = fonte.render("Continuar", True, COR_BRANCO)
+    tela.blit(img_c, img_c.get_rect(center=btn_cont.center))
+
+    pygame.draw.rect(tela, COR_ALVO, btn_volt, border_radius=10)
+    img_v = fonte.render("Voltar", True, COR_BRANCO)
+    tela.blit(img_v, img_v.get_rect(center=btn_volt.center))
+
+    return recs_criancas, btn_cont, btn_volt
+
 
 def desenhar_tela_configuracoes():
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
-    
+
+    # Cálculo do centro para alinhar o bloco de configurações (largura total ~ 700px)
+    centro_x = LARGURA // 2
+    inicio_x_rotulo = centro_x - 350
+    inicio_x_opcao = centro_x - 110
+
     texto_titulo = fonte_titulo.render("Configurações", True, COR_TEXTO)
-    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, 45)))
-    
+    tela.blit(texto_titulo, texto_titulo.get_rect(center=(centro_x, 45)))
+
     # 1. Botão de Cadastrar Nova Criança
-    btn_cadastrar_novo = pygame.Rect(50, 90, 260, 40)
-    cor_cad = COR_BOTAO_HOVER if btn_cadastrar_novo.collidepoint(mouse_pos) else COR_BOTAO
+    btn_cadastrar_novo = pygame.Rect(0, 0, 260, 40)
+    btn_cadastrar_novo.center = (centro_x, 105)
+    cor_cad = (
+        COR_BOTAO_HOVER
+        if btn_cadastrar_novo.collidepoint(mouse_pos)
+        else COR_BOTAO
+    )
     pygame.draw.rect(tela, cor_cad, btn_cadastrar_novo, border_radius=8)
-    tela.blit(fonte.render("+ Cadastrar Criança", True, COR_TEXTO), (70, 98))
+    txt_cad = fonte.render("+ Cadastrar Criança", True, COR_TEXTO)
+    tela.blit(txt_cad, txt_cad.get_rect(center=btn_cadastrar_novo.center))
 
     # 2. Seleção de Criança
-    tela.blit(fonte.render("Criança Selecionada:", True, COR_TEXTO), (50, 150))
+    tela.blit(
+        fonte.render("Criança Selecionada:", True, COR_TEXTO),
+        (inicio_x_rotulo, 160),
+    )
     botoes_criancas = []
-    
+
     if not lista_criancas:
-        tela.blit(font_campo.render("Nenhuma criança cadastrada.", True, (150, 150, 150)), (260, 153))
+        tela.blit(
+            font_campo.render(
+                "Nenhuma criança cadastrada.", True, (150, 150, 150)
+            ),
+            (inicio_x_opcao, 163),
+        )
     else:
-        for idx, cr in enumerate(lista_criancas[:3]): # Exibe até 3 botões rápidos
-            rect_cr = pygame.Rect(260 + (idx * 160), 145, 150, 35)
-            is_selected = crianca_config_selecionada and crianca_config_selecionada["id"] == cr["id"]
-            cor = COR_INPUT_ATIVO if is_selected else (COR_BOTAO_HOVER if rect_cr.collidepoint(mouse_pos) else COR_BOTAO)
+        for idx, cr in enumerate(lista_criancas[:3]):  # Exibe até 3 botões rápidos
+            rect_cr = pygame.Rect(inicio_x_opcao + (idx * 160), 155, 150, 35)
+            is_selected = (
+                crianca_config_selecionada
+                and crianca_config_selecionada["id"] == cr["id"]
+            )
+            cor = (
+                COR_INPUT_ATIVO
+                if is_selected
+                else (
+                    COR_BOTAO_HOVER
+                    if rect_cr.collidepoint(mouse_pos)
+                    else COR_BOTAO
+                )
+            )
             pygame.draw.rect(tela, cor, rect_cr, border_radius=5)
-            
-            nome_curto = cr['nome'][:10] + "..." if len(cr['nome']) > 10 else cr['nome']
+
+            nome_curto = (
+                cr["nome"][:10] + "..." if len(cr["nome"]) > 10 else cr["nome"]
+            )
             txt_c = font_campo.render(nome_curto, True, COR_TEXTO)
             tela.blit(txt_c, txt_c.get_rect(center=rect_cr.center))
             botoes_criancas.append((rect_cr, cr))
 
-    pygame.draw.line(tela, COR_GUIA, (50, 200), (750, 200), 2)
+    pygame.draw.line(
+        tela,
+        COR_GUIA,
+        (inicio_x_rotulo, 210),
+        (inicio_x_rotulo + 700, 210),
+        2,
+    )
 
-    # 3. Configuração de Cor do Traçado para a Criança Selecionada
-    tela.blit(fonte.render("Cor do Traçado:", True, COR_TEXTO), (50, 220))
+    # 3. Configuração de Cor do Traçado
+    tela.blit(
+        fonte.render("Cor do Traçado:", True, COR_TEXTO), (inicio_x_rotulo, 230)
+    )
     botoes_cores = []
-    x_cor = 240
+    x_cor = inicio_x_opcao
     for nome_cor, valor_rgb in OPCOES_CORES_TRACADO.items():
-        rect_cor = pygame.Rect(x_cor, 215, 90, 35)
-        is_sel = (cor_tracado_temp == nome_cor)
-        
-        # Borda de seleção
+        rect_cor = pygame.Rect(x_cor, 225, 90, 35)
+        is_sel = cor_tracado_temp == nome_cor
+
         if is_sel:
-            pygame.draw.rect(tela, COR_TEXTO, rect_cor.inflate(4, 4), border_radius=7)
-            
+            pygame.draw.rect(
+                tela, COR_TEXTO, rect_cor.inflate(4, 4), border_radius=7
+            )
+
         pygame.draw.rect(tela, valor_rgb, rect_cor, border_radius=5)
-        txt_cor = font_campo.render(nome_cor, True, COR_BRANCO if nome_cor in ["Azul", "Verde", "Vermelho"] else COR_TEXTO)
+        txt_cor = font_campo.render(
+            nome_cor,
+            True,
+            (
+                COR_BRANCO
+                if nome_cor in ["Azul", "Verde", "Vermelho"]
+                else COR_TEXTO
+            ),
+        )
         tela.blit(txt_cor, txt_cor.get_rect(center=rect_cor.center))
         botoes_cores.append((rect_cor, nome_cor))
         x_cor += 100
 
     # 4. Seleção de Ruído
-    tela.blit(fonte.render("Seleção de Ruído:", True, COR_TEXTO), (50, 280))
-    btn_r_baixo = pygame.Rect(240, 275, 110, 35)
+    tela.blit(
+        fonte.render("Seleção de Ruído:", True, COR_TEXTO),
+        (inicio_x_rotulo, 290),
+    )
+    btn_r_baixo = pygame.Rect(inicio_x_opcao, 285, 110, 35)
     cor_rb = COR_INPUT_ATIVO if ruido_temp == "Baixo" else COR_BOTAO
     pygame.draw.rect(tela, cor_rb, btn_r_baixo, border_radius=5)
-    tela.blit(fonte.render("Baixo", True, COR_TEXTO), (270, 280))
-    
-    btn_r_medio = pygame.Rect(360, 275, 110, 35)
+    txt_rb = fonte.render("Baixo", True, COR_TEXTO)
+    tela.blit(txt_rb, txt_rb.get_rect(center=btn_r_baixo.center))
+
+    btn_r_medio = pygame.Rect(inicio_x_opcao + 120, 285, 110, 35)
     cor_rm = COR_INPUT_ATIVO if ruido_temp == "Médio" else COR_BOTAO
     pygame.draw.rect(tela, cor_rm, btn_r_medio, border_radius=5)
-    tela.blit(fonte.render("Médio", True, COR_TEXTO), (390, 280))
+    txt_rm = fonte.render("Médio", True, COR_TEXTO)
+    tela.blit(txt_rm, txt_rm.get_rect(center=btn_r_medio.center))
 
-    pygame.draw.line(tela, COR_GUIA, (50, 335), (750, 335), 2)
+    pygame.draw.line(
+        tela,
+        COR_GUIA,
+        (inicio_x_rotulo, 345),
+        (inicio_x_rotulo + 700, 345),
+        2,
+    )
 
     # 5. Alterar PIN Parental
-    tela.blit(fonte.render("Alterar PIN Parental:", True, COR_TEXTO), (50, 360))
-    rect_novo_pin = pygame.Rect(270, 355, 150, 40)
+    tela.blit(
+        fonte.render("Alterar PIN Parental:", True, COR_TEXTO),
+        (inicio_x_rotulo, 365),
+    )
+    rect_novo_pin = pygame.Rect(inicio_x_opcao, 360, 150, 40)
     cor_p = COR_INPUT_ATIVO if campo_config_ativo == "pin" else COR_BRANCO
     pygame.draw.rect(tela, cor_p, rect_novo_pin, border_radius=5)
     pygame.draw.rect(tela, COR_GUIA, rect_novo_pin, width=2, border_radius=5)
-    renderizar_texto_com_scroll(temp_pin_novo, "", 150, 270, 355)
+    renderizar_texto_com_scroll(temp_pin_novo, "", 150, inicio_x_opcao, 360)
 
     # Botões Confirmar e Cancelar
     btn_cancelar = pygame.Rect(0, 490, 180, 45)
-    btn_cancelar.centerx = (LARGURA // 2) - 110
-    cor_ca = COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
+    btn_cancelar.centerx = (centro_x) - 110
+    cor_ca = (
+        COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
+    )
     pygame.draw.rect(tela, cor_ca, btn_cancelar, border_radius=10)
     txt_ca = fonte.render("Cancelar", True, COR_TEXTO)
     tela.blit(txt_ca, txt_ca.get_rect(center=btn_cancelar.center))
-    
+
     btn_confirmar = pygame.Rect(0, 490, 180, 45)
-    btn_confirmar.centerx = (LARGURA // 2) + 110
-    cor_co = COR_BOTAO_HOVER if btn_confirmar.collidepoint(mouse_pos) else COR_BOTAO
+    btn_confirmar.centerx = (centro_x) + 110
+    cor_co = (
+        COR_BOTAO_HOVER if btn_confirmar.collidepoint(mouse_pos) else COR_BOTAO
+    )
     pygame.draw.rect(tela, cor_co, btn_confirmar, border_radius=10)
     txt_co = fonte.render("Salvar Alterações", True, COR_TEXTO)
     tela.blit(txt_co, txt_co.get_rect(center=btn_confirmar.center))
-    
-    return btn_cadastrar_novo, botoes_criancas, botoes_cores, btn_r_baixo, btn_r_medio, rect_novo_pin, btn_confirmar, btn_cancelar
 
-def desenhar_menu_crianca():
+    return (
+        btn_cadastrar_novo,
+        botoes_criancas,
+        botoes_cores,
+        btn_r_baixo,
+        btn_r_medio,
+        rect_novo_pin,
+        btn_confirmar,
+        btn_cancelar,
+    )
+
+
+def desenhar_cadastro_crianca():
     tela.fill(COR_FUNDO)
     mouse_pos = pygame.mouse.get_pos()
-    
-    texto_titulo = fonte_titulo.render("Selecione a Criança que vai Jogar", True, COR_TEXTO)
-    tela.blit(texto_titulo, texto_titulo.get_rect(center=(LARGURA // 2, ALTURA * 0.15)))
-    
-    retangulos_criancas = []
-    
-    if not lista_criancas:
-        txt_vazio = fonte.render("Nenhuma criança cadastrada. Acesse as Configurações.", True, (150, 150, 150))
-        tela.blit(txt_vazio, txt_vazio.get_rect(center=(LARGURA // 2, ALTURA * 0.45)))
-    else:
-        for idx, crianca in enumerate(lista_criancas):
-            rect_p = pygame.Rect(150, 180 + (idx * 70), 500, 55)
-            
-            if crianca_selecionada and crianca_selecionada["id"] == crianca["id"]:
-                cor = COR_INPUT_ATIVO
-            else:
-                cor = COR_BOTAO_HOVER if rect_p.collidepoint(mouse_pos) else COR_BOTAO
-                
-            pygame.draw.rect(tela, cor, rect_p, border_radius=10)
-            txt_nome = fonte.render(f"{crianca['nome']} ({crianca['nascimento']}) - {crianca['sexo']}", True, COR_TEXTO)
-            tela.blit(txt_nome, (180, 195 + (idx * 70)))
-            
-            retangulos_criancas.append((rect_p, crianca))
-        
-    btn_continuar = pygame.Rect(0, 0, 220, 50)
-    btn_continuar.center = (LARGURA // 2, ALTURA * 0.82)
-    
-    cor_btn = COR_BOTAO
-    if crianca_selecionada:
-        cor_btn = COR_BOTAO_HOVER if btn_continuar.collidepoint(mouse_pos) else COR_INICIO
-        
-    pygame.draw.rect(tela, cor_btn, btn_continuar, border_radius=10)
-    txt_btn = fonte.render("Iniciar Jogo", True, COR_BRANCO if crianca_selecionada else COR_TEXTO)
-    tela.blit(txt_btn, txt_btn.get_rect(center=btn_continuar.center))
-    
-    btn_voltar = pygame.Rect(50, 500, 120, 40)
-    cor_voltar = COR_BOTAO_HOVER if btn_voltar.collidepoint(mouse_pos) else COR_BOTAO
-    pygame.draw.rect(tela, cor_voltar, btn_voltar, border_radius=10)
-    tela.blit(fonte.render("Voltar", True, COR_TEXTO), (85, 508))
-    
-    return retangulos_criancas, btn_continuar, btn_voltar
+
+    centro_x = LARGURA // 2
+    inicio_x_campos = centro_x - 300  # Centraliza um bloco de 600px de largura
+
+    texto_titulo = fonte_titulo.render("Cadastro de Criança", True, COR_TEXTO)
+    tela.blit(
+        texto_titulo,
+        texto_titulo.get_rect(center=(centro_x, ALTURA * 0.10)),
+    )
+
+    # Campo Nome
+    rect_nome = pygame.Rect(inicio_x_campos, 160, 600, 40)
+    cor_n = COR_INPUT_ATIVO if campo_ativo == "nome" else COR_BRANCO
+    pygame.draw.rect(tela, cor_n, rect_nome, border_radius=5)
+    pygame.draw.rect(tela, COR_GUIA, rect_nome, width=2, border_radius=5)
+    renderizar_texto_com_scroll(
+        input_cadastro["nome"], "Nome: ", 600, inicio_x_campos, 160
+    )
+
+    # Campo Nascimento
+    rect_nasc = pygame.Rect(inicio_x_campos, 230, 300, 40)
+    cor_na = COR_INPUT_ATIVO if campo_ativo == "nascimento" else COR_BRANCO
+    pygame.draw.rect(tela, cor_na, rect_nasc, border_radius=5)
+    pygame.draw.rect(tela, COR_GUIA, rect_nasc, width=2, border_radius=5)
+    renderizar_texto_com_scroll(
+        input_cadastro["nascimento"],
+        "Data Nasc.: ",
+        300,
+        inicio_x_campos,
+        230,
+    )
+
+    # Botões Sexo
+    rect_sexo_m = pygame.Rect(inicio_x_campos + 350, 230, 110, 40)
+    cor_sm = (
+        COR_INPUT_ATIVO
+        if input_cadastro["sexo"] == "Masculino"
+        else COR_BOTAO
+    )
+    pygame.draw.rect(tela, cor_sm, rect_sexo_m, border_radius=5)
+    txt_sm = font_campo.render("Masculino", True, COR_TEXTO)
+    tela.blit(txt_sm, txt_sm.get_rect(center=rect_sexo_m.center))
+
+    rect_sexo_f = pygame.Rect(inicio_x_campos + 480, 230, 110, 40)
+    cor_sf = (
+        COR_INPUT_ATIVO if input_cadastro["sexo"] == "Feminino" else COR_BOTAO
+    )
+    pygame.draw.rect(tela, cor_sf, rect_sexo_f, border_radius=5)
+    txt_sf = font_campo.render("Feminino", True, COR_TEXTO)
+    tela.blit(txt_sf, txt_sf.get_rect(center=rect_sexo_f.center))
+
+    # Botões Confirmar e Cancelar
+    btn_cancelar = pygame.Rect(0, 480, 180, 45)
+    btn_cancelar.centerx = (centro_x) - 110
+    cor_ca = (
+        COR_BOTAO_HOVER if btn_cancelar.collidepoint(mouse_pos) else COR_BOTAO
+    )
+    pygame.draw.rect(tela, cor_ca, btn_cancelar, border_radius=10)
+    txt_ca = fonte.render("Cancelar", True, COR_TEXTO)
+    tela.blit(txt_ca, txt_ca.get_rect(center=btn_cancelar.center))
+
+    btn_confirmar = pygame.Rect(0, 480, 180, 45)
+    btn_confirmar.centerx = (centro_x) + 110
+    cor_co = (
+        COR_BOTAO_HOVER if btn_confirmar.collidepoint(mouse_pos) else COR_BOTAO
+    )
+    pygame.draw.rect(tela, cor_co, btn_confirmar, border_radius=10)
+    txt_co = fonte.render("Confirmar", True, COR_TEXTO)
+    tela.blit(txt_co, txt_co.get_rect(center=btn_confirmar.center))
+
+    return (
+        rect_nome,
+        rect_nasc,
+        rect_sexo_m,
+        rect_sexo_f,
+        btn_confirmar,
+        btn_cancelar,
+    )
 
 def desenhar_tela_estatisticas():
     tela.fill(COR_FUNDO)
