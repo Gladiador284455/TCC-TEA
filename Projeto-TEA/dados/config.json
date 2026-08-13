@@ -3,10 +3,16 @@
     "pin": "0000",
     "config_criancas": {
         "3": {
-            "cor_tracado": "Rosa"
+            "cor_tracado": "Amarelo",
+            "som": false
         },
         "1": {
-            "cor_tracado": "Amarelo"
+            "cor_tracado": "Verde",
+            "som": true
+        },
+        "2": {
+            "cor_tracado": "Azul",
+            "som": true
         }
     },
     "brilho": 200,
