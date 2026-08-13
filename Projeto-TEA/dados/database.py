@@ -104,3 +104,14 @@ def obter_criancas():
     
     conn.close()
     return resultados
+
+
+"""Deleta uma criança do banco de dados pelo ID"""
+def deletar_crianca(id_crianca):
+    import sqlite3
+    conn = sqlite3.connect('dados/playdot.db')
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM criancas WHERE id = ?", (id_crianca,))
+    conn.commit()
+    conn.close()
+    return True

@@ -3,6 +3,9 @@
     "pin": "0000",
     "config_criancas": {
         "3": {
+            "cor_tracado": "Rosa"
+        },
+        "1": {
             "cor_tracado": "Amarelo"
         }
     },
