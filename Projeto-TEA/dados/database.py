@@ -115,3 +115,46 @@ def deletar_crianca(id_crianca):
     conn.commit()
     conn.close()
     return True
+
+def iniciar_banco():
+    conn = obter_conexao()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS criancas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT,
+            nascimento TEXT,
+            sexo TEXT,
+            obs TEXT,
+            cor_tracado TEXT DEFAULT 'Azul',
+            som_ativo INTEGER DEFAULT 1
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def remover_crianca(id_crianca):
+    """Remove a criança do banco de dados pelo ID."""
+    conn = obter_conexao()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM criancas WHERE id = ?", (id_crianca,))
+    conn.commit()
+    conn.close()
+
+
+def atualizar_config_crianca(id_crianca, cor_tracado, som_ativo):
+    """Atualiza as preferências individuais da criança."""
+    conn = obter_conexao()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        UPDATE criancas 
+        SET cor_tracado = ?, som_ativo = ?
+        WHERE id = ?
+    """,
+        (cor_tracado, 1 if som_ativo else 0, id_crianca),
+    )
+    conn.commit()
+    conn.close()
