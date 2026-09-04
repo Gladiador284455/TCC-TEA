@@ -53,15 +53,28 @@ def iniciar_banco():
     conn.commit()
     conn.close()
 
-def salvar_tentativa(fase, tempo, precisao, hesitacao):
-    conn = obter_conexao()
+def salvar_tentativa(id_crianca, fase, tempo, precisao, hesitacao, angulo):
+    import sqlite3
+    conn = sqlite3.connect("dados/banco.db")
     cursor = conn.cursor()
-    agora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    cursor.execute('''
-        INSERT INTO tentativas (fase, timestamp, tempo_execucao, precisao, indice_hesitacao)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (fase, agora, tempo, precisao, hesitacao))
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tentativas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_crianca INTEGER NOT NULL,
+        fase TEXT,
+        tempo REAL,
+        precisao REAL,
+        hesitacao REAL,
+        angulo REAL,
+        FOREIGN KEY (id_crianca) REFERENCES criancas (id)
+    );
+    """)
+    
+    cursor.execute("""
+        INSERT INTO tentativas (id_crianca, fase, tempo, precisao, hesitacao, angulo)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (id_crianca, fase, tempo, precisao, hesitacao, angulo))
     
     conn.commit()
     conn.close()
@@ -104,6 +117,47 @@ def obter_criancas():
     
     conn.close()
     return resultados
+
+def obter_desempenho_crianca(id_crianca):
+    import sqlite3
+
+    conn = sqlite3.connect("dados/banco.db")
+    cursor = conn.cursor()
+
+    # Cria a tabela no SQLite se ela ainda não existir
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tentativas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id_crianca INTEGER NOT NULL,
+        fase TEXT,
+        tempo REAL,
+        precisao REAL,
+        hesitacao REAL,
+        angulo REAL,
+        FOREIGN KEY (id_crianca) REFERENCES criancas (id)
+    );
+    """)
+    conn.commit()
+
+    # Busca os dados do desempenho
+    cursor.execute("""
+        SELECT angulo, precisao
+        FROM tentativas
+        WHERE id_crianca = ?
+        ORDER BY id ASC
+    """, (id_crianca,))
+
+    linhas = cursor.fetchall()
+    conn.close()
+
+    # Organiza os resultados por ângulo
+    desempenho = {}
+    for angulo, precisao in linhas:
+        if angulo not in desempenho:
+            desempenho[angulo] = []
+        desempenho[angulo].append(precisao)
+
+    return desempenho
 
 
 """Deleta uma criança do banco de dados pelo ID"""

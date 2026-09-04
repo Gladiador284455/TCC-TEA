@@ -1,16 +1,28 @@
 {
-    "ruido": "Baixo",
+    "ruido": "Médio",
     "pin": "0000",
     "config_criancas": {
-        "3": {
-            "cor_tracado": "Amarelo",
-            "som": false
-        },
         "1": {
             "cor_tracado": "Verde",
             "som": true
         },
-        "2": {
+        "29": {
+            "cor_tracado": "Azul",
+            "som": true
+        },
+        "30": {
+            "cor_tracado": "Azul",
+            "som": true
+        },
+        "17": {
+            "cor_tracado": "Amarelo",
+            "som": false
+        },
+        "19": {
+            "cor_tracado": "Rosa",
+            "som": false
+        },
+        "31": {
             "cor_tracado": "Azul",
             "som": true
         }
